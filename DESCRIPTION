@@ -1,7 +1,7 @@
 Package: fwb
 Type: Package
 Title: Fractional Weighted Bootstrap
-Version: 0.1.0
+Version: 0.1.1
 Authors@R: c(
     person("Noah", "Greifer", role=c("aut", "cre"), 
            email = "noah.greifer@gmail.com",
@@ -12,7 +12,7 @@ Description: An implementation of the fractional weighted bootstrap to be used a
    weights randomly that are applied to the data rather than resampling units from the data. See Xu et al. (2020)
    <doi:10.1080/00031305.2020.1731599> for details.
 Depends: R (>= 3.0.0)
-Imports: chk, pbapply
+Imports: rlang, chk, pbapply
 Suggests: survival, boot, sandwich (>= 2.4-0), lmtest, parallel
 License: GPL (>= 2)
 Encoding: UTF-8
@@ -21,8 +21,8 @@ BugReports: https://github.com/ngreifer/fwb/issues
 RoxygenNote: 7.2.1
 LazyData: true
 NeedsCompilation: no
-Packaged: 2022-09-16 21:21:31 UTC; NoahGreifer
+Packaged: 2022-10-26 17:52:48 UTC; NoahGreifer
 Author: Noah Greifer [aut, cre] (<https://orcid.org/0000-0003-3067-7154>)
 Maintainer: Noah Greifer <noah.greifer@gmail.com>
 Repository: CRAN
-Date/Publication: 2022-09-19 12:56:16 UTC
+Date/Publication: 2022-10-26 18:15:07 UTC
