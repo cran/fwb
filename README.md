@@ -38,19 +38,20 @@ You can install the development version of `fwb` from
 [GitHub](https://github.com/) with:
 
 ``` r
-# install.packages("devtools")
-devtools::install_github("ngreifer/fwb")
+# install.packages("remotes")
+remotes::install_github("ngreifer/fwb")
 ```
 
 ## Examples
 
 Below are some examples of how to use `fwb`. We set a seed to ensure all
 results are replicable. (Note that when parallel processing is used, a
-special kind of seed needs to be set; see `?set.seed` for details.)
+special kind of seed needs to be set; see `vignette("fwb-rep")` for
+details.)
 
 ``` r
 library("fwb")
-set.seed(123456)
+set.seed(123456, "L'Ecuyer-CMRG")
 ```
 
 ### Bearing cage field failure Weibull analysis from Xu et al. (2020)
@@ -73,7 +74,7 @@ weibull_est <- function(data, w) {
                            data = data, weights = w,
                            dist = "weibull")
 
-  c(eta = unname(exp(coef(fit))), beta = 1/fit$scale)
+  c(eta = unname(exp(coef(fit))), beta = 1 / fit$scale)
 }
 
 # 1999 bootstrap replications; more is always better
@@ -87,15 +88,15 @@ fwb_est
 #> 
 #> Bootstrap Statistics :
 #>          original         bias   std. error
-#> eta  11792.178173 6528.5275456 21092.241147
-#> beta     2.035319    0.2540133     0.894168
+#> eta  11792.178173 7722.5390790 2.652048e+04
+#> beta     2.035319    0.2326988 8.790395e-01
 
 # Bias-corrected accelerated percentile
 # confidence interval
 summary(fwb_est, ci.type = "bca")
 #>      Estimate Std. Error CI 2.5 % CI 97.5 %
-#> eta  1.18e+04   2.11e+04 3.18e+03  7.21e+04
-#> beta 2.04e+00   8.94e-01 1.23e+00  4.66e+00
+#> eta  1.18e+04   2.65e+04 3.15e+03  7.17e+04
+#> beta 2.04e+00   8.79e-01 1.24e+00  4.55e+00
 
 # Plot the bootstrap distribution
 plot(fwb_est, index = "beta", qdist = "chisq")
@@ -126,18 +127,18 @@ fit <- glm(case ~ spontaneous + induced + factor(stratum),
 library("lmtest")
 
 # The traditional bootstrap fails
-coeftest(fit, vcov = sandwich::vcovBS)[1:3,]
+coeftest(fit, vcov = sandwich::vcovBS)[1:3, ]
 #>              Estimate   Std. Error       z value Pr(>|z|)
-#> (Intercept) -6.904101 4.692763e+14 -1.471223e-14        1
-#> spontaneous  3.230286 1.879336e+14  1.718844e-14        1
-#> induced      2.190303 1.443840e+14  1.516998e-14        1
+#> (Intercept) -6.904101 2.285991e+22 -3.020179e-22        1
+#> spontaneous  3.230286 1.670378e+14  1.933866e-14        1
+#> induced      2.190303 1.194912e+14  1.833025e-14        1
 
 # The fractional weighted bootstrap succeeds
-coeftest(fit, vcov = vcovFWB)[1:3,]
+coeftest(fit, vcov = vcovFWB)[1:3, ]
 #>              Estimate Std. Error   z value     Pr(>|z|)
-#> (Intercept) -6.904101  1.8282103 -3.776426 1.590946e-04
-#> spontaneous  3.230286  0.7282145  4.435899 9.168901e-06
-#> induced      2.190303  0.6856374  3.194549 1.400493e-03
+#> (Intercept) -6.904101  1.8325484 -3.767486 1.648995e-04
+#> spontaneous  3.230286  0.7493112  4.311007 1.625127e-05
+#> induced      2.190303  0.6880744  3.183235 1.456391e-03
 ```
 
 We can also perform cluster-robust inference by bootstrapping the
@@ -146,11 +147,11 @@ FWB is still more accurate.)
 
 ``` r
 # Including stratum membership as a clustering variable
-coeftest(fit, vcov = vcovFWB, cluster = ~stratum)[1:3,]
+coeftest(fit, vcov = vcovFWB, cluster = ~stratum)[1:3, ]
 #>              Estimate Std. Error   z value     Pr(>|z|)
-#> (Intercept) -6.904101  1.5157744 -4.554834 5.242687e-06
-#> spontaneous  3.230286  0.6993316  4.619105 3.853991e-06
-#> induced      2.190303  0.6204237  3.530334 4.150356e-04
+#> (Intercept) -6.904101  1.6343290 -4.224426 2.395510e-05
+#> spontaneous  3.230286  0.7317966  4.414185 1.013912e-05
+#> induced      2.190303  0.6745283  3.247162 1.165621e-03
 ```
 
 Let’s look more in-depth at the results of the traditional and
@@ -177,10 +178,10 @@ boot_est
 #> 
 #> 
 #> Bootstrap Statistics :
-#>      original        bias     std. error
-#> t1* -6.904101 -1.069692e+21 3.380971e+22
-#> t2*  3.230286  4.446726e+13 3.182984e+14
-#> t3*  2.190303  2.719013e+13 1.954091e+14
+#>      original       bias     std. error
+#> t1* -6.904101 2.629510e+21 8.083197e+22
+#> t2*  3.230286 2.114656e+13 2.336509e+14
+#> t3*  2.190303 1.696351e+13 1.878001e+14
 
 fwb_est <- fwb(infert, fit_fun, R = 999, verbose = FALSE)
 fwb_est
@@ -191,9 +192,9 @@ fwb_est
 #> 
 #> Bootstrap Statistics :
 #>              original       bias std. error
-#> (Intercept) -6.904101 -1.5663837  1.8587672
-#> spontaneous  3.230286  0.6722459  0.7356135
-#> induced      2.190303  0.5044327  0.6825087
+#> (Intercept) -6.904101 -1.7026157  1.8743631
+#> spontaneous  3.230286  0.7069076  0.7657147
+#> induced      2.190303  0.5690742  0.7096401
 ```
 
 Already the bias and standard errors indicate problems with the
@@ -215,8 +216,8 @@ plot(fwb_est, index = 2)
 It is clear that the estimates from the traditional bootstrap are
 pathological, whereas the estimates from the FWB are more reasonable.
 The non-normality of the FWB distributions also suggests that the usual
-Wald-style confidence intervals may not be accurate, and a percentile
-interval should be computed instead.
+Wald-style confidence intervals may not be accurate, and a
+bias-corrected percentile interval should probably be computed instead.
 
 ## When to use the fractional weighted bootstrap
 

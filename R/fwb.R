@@ -6,10 +6,12 @@
 #' @param statistic a function, which, when applied to `data`, returns a vector containing the statistic(s) of interest. The function should take at least two arguments; the first argument should correspond to the dataset and the second argument should correspond to a vector of weights. Any further arguments can be passed to `statistic` through the `...` argument.
 #' @param R the number of bootstrap replicates. Default is 999 but more is always better. For the percentile bootstrap confidence interval to be exact, it can be beneficial to use one less than a multiple of 100.
 #' @param cluster optional; a vector containing cluster membership. If supplied, will run the cluster bootstrap. See Details. Evaluated first in `data` and then in the global environment.
-#' @param simple `logical`; if `TRUE`, weights will be computed on-the-fly in each bootstrap replication rather than all at once. This can save memory at the cost of some speed.
+#' @param simple `logical`; if `TRUE`, weights will be generated on-the-fly in each bootstrap replication; if `FALSE`, all weights will be generated at once and then supplied to `statistic`. Cannot be `TRUE` when `wtype = "multinom"`. The default (`NULL`) sets to `FALSE` if `wtype = "multinom"` and to `TRUE` otherwise.
 #' @param wtype string; the type of weights to use. Allowable options include `"exp"` (the default), `"pois"`, `"multinom"`, and `"mammen"`. See Details. See [set_fwb_wtype()] to set a global default.
+#' @param strata optional; a vector containing stratum membership for stratified bootstrapping. If supplied, will essentially perform a separate bootstrap within each level of `strata`. This does not affect results when `wtype = "poisson"`.
+#' @param drop0 `logical`; when `wtype` is `"multinom"` or `"poisson"`, whether to drop units that are given weights of 0 from the dataset and weights supplied to `statistic` in each iteration. Ignored for other `wtype`s because they don't produce 0 weights. Default is `FALSE`.
 #' @param verbose `logical`; whether to display a progress bar.
-#' @param cl a cluster object created by \pkgfun{parallel}{makeCluster}, or an integer to indicate the number of child-processes (integer values are ignored on Windows) for parallel evaluations. See \pkgfun{pbapply}{pblapply} for details. If `NULL`, no parallelization will take place.
+#' @param cl a cluster object created by \pkgfun{parallel}{makeCluster}, an integer to indicate the number of child-processes (integer values are ignored on Windows) for parallel evaluations, or the string `"future"` to use a `future` backend. See the `cl` argument of \pkgfun{pbapply}{pblapply} for details. If `NULL`, no parallelization will take place. See `vignette("fwb-rep")` for details.
 #' @param ... other arguments passed to `statistic`.
 #'
 #' @return A `fwb` object, which also inherits from `boot`, with the following components:
@@ -21,15 +23,18 @@
 #' \item{statistic}{The function `statistic` as passed to `fwb()`.}
 #' \item{call}{The original call to `fwb()`.}
 #' \item{cluster}{The vector passed to `cluster`, if any.}
+#' \item{strata}{The vector passed to `strata`, if any.}
 #' \item{wtype}{The type of weights used as determined by the `wtype` argument.}
 #'
-#' @details `fwb()` implements the fractional weighted bootstrap and is meant to function as a drop-in for `boot::boot(., stype = "f")` (i.e., the usual bootstrap but with frequency weights representing the number of times each unit is drawn). In each bootstrap replication, when `wtype = "exp"` (the default), the weights are sampled from independent exponential distributions with rate parameter 1 and then normalized to have a mean of 1, equivalent to drawing the weights from a Dirichlet distribution. Other weights are allowed as determined by the `wtype` argument (see [set_fwb_wtype()] for details). The function supplied to `statistic` must incorporate the weights to compute a weighted statistic. For example, if the output is a regression coefficient, the weights supplied to the `w` argument of `statistic` should be supplied to the `weights` argument of `lm()`. These weights should be used any time frequency weights would be, since they are meant to function like frequency weights (which, in the case of the traditional bootstrap, would be integers). Unfortunately, there is no way for `fwb()` to know whether you are using the weights correctly, so care should be taken to ensure weights are correctly incorporated into the estimator.
+#' @details `fwb()` implements the fractional weighted bootstrap and is meant to function as a drop-in for `boot::boot(., stype = "f")` (i.e., the usual bootstrap but with frequency weights representing the number of times each unit is drawn). In each bootstrap replication, when `wtype = "exp"` (the default), the weights are sampled from independent exponential distributions with rate parameter 1 and then normalized to have a mean of 1, equivalent to drawing the weights from a Dirichlet distribution. Other weights are allowed as determined by the `wtype` argument (see below for details). The function supplied to `statistic` must incorporate the weights to compute a weighted statistic. For example, if the output is a regression coefficient, the weights supplied to the `w` argument of `statistic` should be supplied to the `weights` argument of `lm()`. These weights should be used any time frequency weights would be, since they are meant to function like frequency weights (which, in the case of the traditional bootstrap, would be integers). Unfortunately, there is no way for `fwb()` to know whether you are using the weights correctly, so care should be taken to ensure weights are correctly incorporated into the estimator.
 #'
 #' When fitting binomial regression models (e.g., logistic) using [glm()], it may be useful to change the `family` to a "quasi" variety (e.g., [quasibinomial()]) to avoid a spurious warning about "non-integer #successes".
 #'
 #' The cluster bootstrap can be requested by supplying a vector of cluster membership to `cluster`. Rather than generating a weight for each unit, a weight is generated for each cluster and then applied to all units in that cluster.
 #'
-#' Ideally, `statistic` should not involve a random element, or else it will not be straightforward to replicate the bootstrap results using the `seed` included in the output object. Setting a seed using [set.seed()] is always advised.
+#' Bootstrapping can be performed within strata by supplying a vector of stratum membership to `strata`. This essentially rescales the weights within each stratum to have a mean of 1, ensuring that the sum of weights in each stratum is equal to the stratum size. For multinomial weights, using strata is equivalent to drawing samples with replacement from each stratum. Strata do not affect bootstrapping when using Poisson weights.
+#'
+#' Ideally, `statistic` should not involve a random element, or else it will not be straightforward to replicate the bootstrap results using the `seed` included in the output object. Setting a seed using [set.seed()] is always advised. See `vignette("fwb-rep")` for details.
 #'
 #' The `print()` method displays the value of the statistics, the bias (the difference between the statistic and the mean of its bootstrap distribution), and the standard error (the standard deviation of the bootstrap distribution).
 #'
@@ -39,23 +44,25 @@
 #'
 #' - `"exp"`
 #'
-#' Draws weights from an exponential distribution with rate parameter 1 using [rexp()]. These weights are the usual "Bayesian bootstrap" weights described in Xu et al. (2020). They are equivalent to drawing weights from a uniform Dirichlet distribution, which is what gives these weights the interpretation of a Bayesian prior.
+#' Draws weights from an exponential distribution with rate parameter 1 using [rexp()]. These weights are the usual "Bayesian bootstrap" weights described in Xu et al. (2020). They are equivalent to drawing weights from a uniform Dirichlet distribution, which is what gives these weights the interpretation of a Bayesian prior. The weights are scaled to have a mean of 1 within each stratum (or in the full sample if `strata` is not supplied).
 #'
 #' - `"multinom"`
 #'
-#' Draws integer weights using [sample()], which samples unit indices with replacement and uses the tabulation of the indices as frequency weights. This is equivalent to drawing weights from a multinomial distribution. Using `wtype = "multinom"` is the same as using `boot::boot(., stype = "f")` instead of `fwb()` (i.e., the resulting estimates will be identical).
+#' Draws integer weights using [sample()], which samples unit indices with replacement and uses the tabulation of the indices as frequency weights. This is equivalent to drawing weights from a multinomial distribution. Using `wtype = "multinom"` is the same as using `boot::boot(., stype = "f")` instead of `fwb()` (i.e., the resulting estimates will be identical). When `strata` is supplied, unit indices are drawn with replacement within each stratum so that the sum of the weights in each stratum is equal to the stratum size.
 #'
 #' - `"poisson"`
 #'
-#' Draws integer weights from a Poisson distribution with 1 degree of freedom using [rpois()]. This is an alternative to the multinomial weights that yields similar estimates (especially as the sample size grows) but can be faster.
+#' Draws integer weights from a Poisson distribution with 1 degree of freedom using [rpois()]. This is an alternative to the multinomial weights that yields similar estimates (especially as the sample size grows) but can be faster. Note `strata` is ignored when using `"poisson"`.
 #'
 #' - `"mammen"`
 #'
-#' Draws weights from a modification of the distribution described by Mammen (1983) for use in the wild bootstrap. These positive weights have a mean, variance, and skewness of 1, making them second-order accurate (in contrast to the usual exponential weights, which are only first-order accurate). The weights \eqn{w} are drawn such that \eqn{P(w=(3+\sqrt{5})/2)=(\sqrt{5}-1)/2\sqrt{5}} and \eqn{P(w=(3-\sqrt{5})/2)=(\sqrt{5}+1)/2\sqrt{5}}.
+#' Draws weights from a modification of the distribution described by Mammen (1983) for use in the wild bootstrap. These positive weights have a mean, variance, and skewness of 1, making them second-order accurate (in contrast to the usual exponential weights, which are only first-order accurate). The weights \eqn{w} are drawn such that \eqn{P(w=(3+\sqrt{5})/2)=(\sqrt{5}-1)/2\sqrt{5}} and \eqn{P(w=(3-\sqrt{5})/2)=(\sqrt{5}+1)/2\sqrt{5}}. The weights are scaled to have a mean of 1 within each stratum (or in the full sample if `strata` is not supplied).
 #'
-#' In general, `"mammen"` should be used for all cases. `"exp"` is the default due to it being the formulation described in Xu et al. (2020) and in the most formulations of the Bayesian bootstrap; it should be used if one wants to remain in line with these guidelines or to maintain a Bayesian flavor to the analysis, whereas `"mammen"`should be preferred for its frequentist operating characteristics. `"multinom"` and `"poisson"` should only be used for comparison purposes.
+#' `"exp"` is the default due to it being the formulation described in Xu et al. (2020) and in the most formulations of the Bayesian bootstrap; it should be used if one wants to remain in line with these guidelines or to maintain a Bayesian flavor to the analysis, whereas `"mammen"` might be preferred for its frequentist operating characteristics, though its performance has not been studied in this context. `"multinom"` and `"poisson"` should only be used for comparison purposes.
 #'
 #' @seealso [fwb.ci()] for calculating confidence intervals; [summary.fwb()] for displaying output in a clean way; [plot.fwb()] for plotting the bootstrap distributions; [vcovFWB()] for estimating the covariance matrix of estimates using the FWB; [set_fwb_wtype()] for an example of using weights other than the default exponential weights; \pkgfun{boot}{boot} for the traditional bootstrap.
+#'
+#' See `vignette("fwb-rep")` for information on reproducibility.
 #'
 #' @references
 #' Mammen, E. (1993). Bootstrap and Wild Bootstrap for High Dimensional Linear Models. *The Annals of Statistics*, 21(1). \doi{10.1214/aos/1176349025}
@@ -64,14 +71,12 @@
 #'
 #' Xu, L., Gotwalt, C., Hong, Y., King, C. B., & Meeker, W. Q. (2020). Applications of the Fractional-Random-Weight Bootstrap. *The American Statistician*, 74(4), 345–358. \doi{10.1080/00031305.2020.1731599}
 #'
-#' The use of the `"mammen"` formulation of the bootstrap weights was suggested by Lihua Lei [here](https://twitter.com/lihua_lei_stat/status/1641538993090351106).
-#'
-#' @export
+#' The use of the `"mammen"` formulation of the bootstrap weights was suggested by Lihua Lei [here](https://x.com/lihua_lei_stat/status/1641538993090351106).
 #'
 #' @examplesIf requireNamespace("survival", quietly = TRUE)
 #' # Performing a Weibull analysis of the Bearing Cage
 #' # failure data as done in Xu et al. (2020)
-#' set.seed(123)
+#' set.seed(123, "L'Ecuyer-CMRG")
 #' data("bearingcage")
 #'
 #' weibull_est <- function(data, w) {
@@ -92,118 +97,204 @@
 #'
 #' #Plot statistic distributions
 #' plot(boot_est, index = "beta", type = "hist")
-#'
-#'
-fwb <- function(data, statistic, R = 999, cluster = NULL, simple = FALSE,
-                wtype = getOption("fwb_wtype", "exp"), verbose = TRUE,
-                cl = NULL, ...) {
+
+#' @export
+fwb <- function(data, statistic, R = 999, cluster = NULL, simple = NULL,
+                wtype = getOption("fwb_wtype", "exp"), strata = NULL, drop0 = FALSE,
+                verbose = TRUE, cl = NULL, ...) {
 
   bcall <- match.call()
 
   #Check data
-  if (missing(data)) {
-    .err("`data` must be specified")
-  }
+  chk::chk_not_missing(data, "`data`")
   chk::chk_data(data)
 
-  #Check statistic
-  if (missing(statistic)) {
-    .err("`statistic` must be specified")
+  n <- nrow(data)
+  if (is_null(n) || !chk::vld_count(n) || n < 1L) {
+    .err("`data` must be present")
   }
+
+  #Check statistic
+  chk::chk_not_missing(statistic, "`statistic`")
   chk::chk_function(statistic)
-  # if (!all(c("data", "w") %in% names(formals(statistic)))) {
-  #   .err("`statistic` must have a `data` argument and a `w` argument")
-  # }
 
   #Check R
   chk::chk_count(R)
   chk::chk_gt(R, 0)
 
+  #Check cluster
   clus <- substitute(cluster)
   cluster <- eval(clus, data, parent.frame())
 
-  if (!is.null(cluster)) {
+  if (is_not_null(cluster)) {
     .chk_atomic_vector(cluster)
+
+    cluster <- factor(cluster)
+    nc <- nlevels(cluster)
+    cluster_numeric <- as.integer(cluster)
   }
+
+  #Check strata
+  strat <- substitute(strata)
+  strata <- eval(strat, data, parent.frame())
+  strata_to_use <- NULL
+
+  if (is_not_null(strata)) {
+    .chk_atomic_vector(strata)
+    chk::chk_length(strata, n)
+
+    strata_to_use <- factor(strata)
+
+    if (is_not_null(cluster)) {
+      cs <- unique(data.frame(cluster, strata_to_use))
+
+      if (nrow(cs) != nlevels(cluster)) {
+        .err("clusters must be completely nested within strata")
+      }
+
+      strata_to_use <- cs[[2L]]
+    }
+  }
+
+  #Check verbose
+  chk::chk_flag(verbose)
 
   #Check wtype
   chk::chk_string(wtype)
 
+  gen_weights <- make_gen_weights(wtype)
+  wtype <- attr(gen_weights, "wtype", TRUE)
+
+  #Check drop0
+  if (wtype %in% c("multinom", "poisson")) {
+    chk::chk_flag(drop0)
+  }
+  else {
+    drop0 <- FALSE
+  }
+
   #Check simple
-  chk::chk_flag(simple)
+  if (is_not_null(simple)) {
+    chk::chk_flag(simple)
 
-  chk::chk_flag(verbose)
+    if (simple && wtype == "multinom") {
+      .err("`simple` cannot be `TRUE` when `wtype = \"multinom\"`")
+    }
+  }
+  else {
+    simple <- wtype != "multinom"
+  }
 
-  n <- nrow(data)
-  if (is.null(n) || !chk::vld_count(n)) {
-    .err("`data` must be present")
+  #Process cl
+  future.seed <- NULL
+  if (is_not_null(cl)) {
+    parallel_seed_set <- identical(RNGkind()[1L], "L'Ecuyer-CMRG")
+
+    if (simple && !parallel_seed_set &&
+        ((is.numeric(cl) && !isTRUE(all.equal(cl, 1))) || identical(cl, "future"))) {
+      .wrn('`cl` was supplied but the random number generator is not suitable for parallelization. Set an appropriate seed using `set.seed(###, "L\'Ecuyer-CMRG")`, where ### is your favorite integer. See `?set.seed` for details')
+    }
+
+    if (identical(cl, "future")) {
+      future.seed <- TRUE
+    }
   }
 
   #Test fun
-  t0 <- try(statistic(data, rep(1, n), ...))
+  t0 <- try(call_statistic(statistic, data = data, wi = rep.int(1, n),
+                           ..., drop0 = drop0))
+
   if (inherits(t0, "try-error")) {
-    .err("there was an error running the function supplied to `statistic` on unit-weighted data. Error produced:\n\t",
-             conditionMessage(attr(t0, "condition")))
+    .err("There was an error running the function supplied to `statistic` on unit-weighted data. Error produced:\n\t",
+         conditionMessage(attr(t0, "condition", TRUE)),
+         tidy = FALSE)
   }
-  if (!is.numeric(t0) || !is.null(dim(t0))) {
+
+  if (!is.numeric(t0) || is_not_null(dim(t0))) {
     .err("the output of the function supplied to `statistic` must be a numeric vector")
   }
 
-  if (is.null(names(t0))) {
-    names(t0) <- paste0("t", seq_along(t))
+  if (anyNA(t0)) {
+    .err("some estimates were returned as `NA` in the original sample")
   }
 
-  if (!exists(".Random.seed", envir = globalenv(), inherits = FALSE))
+  random_statistic <- NULL
+  if (simple) {
+    t0_rep <- try(call_statistic(statistic, data = data, wi = rep.int(1, n),
+                                 ..., drop0 = drop0))
+
+    random_statistic <- !identical(t0_rep, t0)
+  }
+
+  if (is_null(names(t0))) {
+    names(t0) <- paste0("t", seq_along(t0))
+  }
+
+  if (!exists(".Random.seed", envir = globalenv(), inherits = FALSE)) {
     runif(1)
+  }
+
   seed <- get(".Random.seed", envir = globalenv(), inherits = FALSE)
 
-  gen_weights <- make_gen_weights(wtype)
-  wtype <- attr(gen_weights, "wtype")
-
-  if (simple && wtype == "multinom") {
-    .err("`simple` cannot be `TRUE` when `wtype = \"multinom\"`")
-  }
-
-  if (is.null(cluster)) {
+  w <- NULL
+  if (is_null(cluster)) {
     if (simple) {
       FUN <- function(i) {
-        w <- drop(gen_weights(n, 1))
-        statistic(data, w, ...)
+        wi <- drop(gen_weights(n, 1L, strata_to_use))
+        call_statistic(statistic, data = data, wi = wi,
+                       ..., drop0 = drop0)
       }
     }
     else {
-      w <- gen_weights(n, R)
+      w <- gen_weights(n, R, strata_to_use)
       FUN <- function(i) {
-        statistic(data, w[i,], ...)
+        call_statistic(statistic, data = data, wi = w[i,],
+                       ..., drop0 = drop0)
       }
     }
   }
   else {
-    cluster <- factor(cluster)
-    nc <- nlevels(cluster)
-    cluster_numeric <- as.integer(cluster)
-
     if (simple) {
       FUN <- function(i) {
-        cluster_w <- drop(gen_weights(nc, 1))
-        w <- cluster_w[cluster_numeric]
-        statistic(data, w, ...)
+        cluster_w <- drop(gen_weights(nc, 1L, strata_to_use))
+        wi <- cluster_w[cluster_numeric]
+        call_statistic(statistic, data = data, wi = wi,
+                       ..., drop0 = drop0)
       }
     }
     else {
-      cluster_w <- gen_weights(nc, R)
+      cluster_w <- gen_weights(nc, R, strata_to_use)
       w <- cluster_w[, cluster_numeric, drop = FALSE]
       FUN <- function(i) {
-        statistic(data, w[i,], ...)
+        call_statistic(statistic, data = data, wi = w[i,],
+                       ..., drop0 = drop0)
       }
     }
+  }
+
+  if (inherits(cl, "cluster")) {
+    rlang::check_installed("parallel")
+
+    parallel::clusterExport(cl, varlist = c("call_statistic"),
+                            envir = asNamespace("fwb"))
   }
 
   opb <- pbapply::pboptions(type = if (verbose) "timer" else "none")
   on.exit(pbapply::pboptions(opb))
 
   #Run bootstrap
-  t <- do.call("rbind", pbapply::pblapply(seq_len(R), FUN, cl = cl))
+  t <- {
+    if (is_not_null(future.seed))
+      do.call("rbind", pbapply::pblapply(seq_len(R), FUN, cl = cl,
+                                         future.seed = future.seed))
+    else
+      do.call("rbind", pbapply::pblapply(seq_len(R), FUN, cl = cl))
+  }
+
+  if (anyNA(t)) {
+    .wrn("some estimates were returned as `NA`, which can cause problems in subsequent analyses")
+  }
+
   colnames(t) <- names(t0)
 
   out <- list(t0 = t0,
@@ -214,15 +305,21 @@ fwb <- function(data, statistic, R = 999, cluster = NULL, simple = FALSE,
               statistic = statistic,
               call = bcall,
               cluster = cluster,
+              strata = strata,
               wtype = wtype)
 
   class(out) <- c("fwb", "boot")
+
   attr(out, "boot_type") <- "fwb"
+  attr(out, "cl") <- cl
+  attr(out, "simple") <- simple
+  attr(out, "random_statistic") <- random_statistic
 
   out
 }
 
-#' @describeIn fwb Print an `fwb` object
+#' @describeIn fwb
+#' Print an `fwb` object
 #'
 #' @param x an `fwb` object; the output of a call to `fwb()`.
 #' @param digits the number of significant digits to print
@@ -239,9 +336,10 @@ print.fwb <- function(x, digits = getOption("digits"), index = 1L:ncol(x$t), ...
   t <- t[, !allNA, drop = FALSE]
   rn <- colnames(t)
 
-  if (length(index) == 0L)
+  if (is_null(index)) {
     op <- NULL
-  else if (is.null(t0 <- x$t0)) {
+  }
+  else if (is_null(t0 <- x$t0)) {
     op <- cbind(colMeans(t, na.rm = TRUE),
                 apply(t, 2L, sd, na.rm = TRUE))
     dimnames(op) <- list(rn, c("mean", "std. error"))
@@ -255,15 +353,104 @@ print.fwb <- function(x, digits = getOption("digits"), index = 1L:ncol(x$t), ...
 
   }
 
-  cat("FRACTIONAL WEIGHTED BOOTSTRAP\n")
+  if (is_null(x[["strata"]]) && is_null(x[["cluster"]])) {
+    cat("FRACTIONAL WEIGHTED BOOTSTRAP\n")
+  }
+  else if (is_null(x[["strata"]]) && is_not_null(x[["cluster"]])) {
+    cat("FRACTIONAL WEIGHTED CLUSTER BOOTSTRAP\n")
+  }
+  else if (is_not_null(x[["strata"]]) && is_null(x[["cluster"]])) {
+    cat("STRATIFIED FRACTIONAL WEIGHTED BOOTSTRAP\n")
+  }
+  else {
+    cat("STRATIFIED FRACTIONAL WEIGHTED CLUSTER BOOTSTRAP\n")
+  }
 
   cat("\nCall:\n")
   dput(cl, control = NULL)
   cat("\nBootstrap Statistics :\n")
-  if (!is.null(op))
+  if (is_not_null(op)) {
     print(op, digits = digits)
-  if (length(ind1) > 0L)
-    for (j in ind1) cat(sprintf("WARNING: All values of %s* are NA\n", colnames(x[["t"]])[j]))
+  }
+
+  if (is_not_null(ind1)) {
+    for (j in ind1) {
+      cat(sprintf("WARNING: All values of %s* are NA\n", colnames(x[["t"]])[j]))
+    }
+  }
+
   invisible(x)
 }
 
+make_gen_weights <- function(wtype) {
+  wtype <- tolower(wtype)
+  wtype <- match_arg(wtype, c("exp", "multinom", "poisson", "mammen"))
+
+  fun <- switch(wtype,
+                "exp" = function(n, R, strata = NULL) {
+                  w <- matrix(rexp(n * R), nrow = R, ncol = n, byrow = TRUE)
+
+                  if (is_null(strata) || nlevels(strata) <= 1L) {
+                    return(w / rowMeans(w))
+                  }
+
+                  for (s in levels(strata)) {
+                    in_s <- which(strata == s)
+                    w[,in_s] <- w[,in_s] / rowMeans(w[,in_s])
+                  }
+
+                  w
+                },
+                "poisson" = function(n, R, strata = NULL) {
+                  matrix(rpois(n * R, 1), nrow = R, ncol = n, byrow = TRUE)
+                },
+                "multinom" = function(n, R, strata = NULL) {
+                  if (is_null(strata) || nlevels(strata) <= 1) {
+                    i <- sample.int(n, n * R, replace = TRUE)
+                    dim(i) <- c(R, n)
+                  }
+                  else {
+                    i <- matrix(NA_integer_, nrow = R, ncol = n)
+                    for (s in levels(strata)) {
+                      in_s <- which(strata == s)
+                      n_s <- length(in_s)
+                      i[, in_s] <- in_s[sample.int(n_s, n_s * R, replace = TRUE)]
+                    }
+                  }
+
+                  t(apply(i, 1L, tabulate, n))
+                },
+                "mammen" = function(n, R, strata = NULL) {
+                  sqrt5 <- sqrt(5)
+                  w <- matrix((3 - sqrt5) / 2 + sqrt5 * rbinom(n * R, 1L, .5 - 1/(2 * sqrt5)),
+                              nrow = R, ncol = n, byrow = TRUE)
+
+                  if (is_null(strata) || nlevels(strata) <= 1) {
+                    return(w / rowMeans(w))
+                  }
+
+                  for (s in levels(strata)) {
+                    in_s <- which(strata == s)
+                    w[,in_s] <- w[,in_s] / rowMeans(w[,in_s])
+                  }
+
+                  w
+                })
+
+  attr(fun, "wtype") <- wtype
+  fun
+}
+
+call_statistic <- function(statistic, data, wi, ..., drop0 = FALSE) {
+  if (!drop0) {
+    return(statistic(data, wi, ...))
+  }
+
+  non0_wi <- which(wi != 0)
+
+  if (length(non0_wi) == length(wi)) {
+    return(statistic(data, wi, ...))
+  }
+
+  statistic(data[non0_wi, , drop = FALSE], wi[non0_wi], ...)
+}
