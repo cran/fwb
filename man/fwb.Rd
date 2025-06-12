@@ -51,7 +51,8 @@ fwb(
 \item{index}{the index or indices of the position of the quantity of interest in \code{x$t0} if more than one was specified in \code{fwb()}. Default is to print all quantities.}
 }
 \value{
-A \code{fwb} object, which also inherits from \code{boot}, with the following components:
+An \code{fwb} object, which also inherits from \code{boot}, with the following components:
+
 \item{t0}{The observed value of \code{statistic} applied to \code{data} with uniform weights.}
 \item{t}{A matrix with \code{R} rows, each of which is a bootstrap replicate of the result of calling \code{statistic}.}
 \item{R}{The value of \code{R} as passed to \code{fwb()}.}
@@ -62,6 +63,8 @@ A \code{fwb} object, which also inherits from \code{boot}, with the following co
 \item{cluster}{The vector passed to \code{cluster}, if any.}
 \item{strata}{The vector passed to \code{strata}, if any.}
 \item{wtype}{The type of weights used as determined by the \code{wtype} argument.}
+
+\code{fwb} objects have \code{\link[=coef]{coef()}} and \code{\link[=vcov]{vcov()}} methods, which extract the \code{t0} component and covariance of the \code{t} components, respectively.
 }
 \description{
 \code{fwb()} implements the fractional (random) weighted bootstrap, also known as the Bayesian bootstrap. Rather than resampling units to include in bootstrap samples, weights are drawn to be applied to a weighted estimator.
@@ -81,26 +84,21 @@ The \code{print()} method displays the value of the statistics, the bias (the di
 \subsection{Weight types}{
 
 Different types of weights can be supplied to the \code{wtype} argument. A global default can be set using \code{\link[=set_fwb_wtype]{set_fwb_wtype()}}. The allowable weight types are described below.
-\itemize{
-\item \code{"exp"}
-}
 
+\describe{
+\item{\code{"exp"}}{
 Draws weights from an exponential distribution with rate parameter 1 using \code{\link[=rexp]{rexp()}}. These weights are the usual "Bayesian bootstrap" weights described in Xu et al. (2020). They are equivalent to drawing weights from a uniform Dirichlet distribution, which is what gives these weights the interpretation of a Bayesian prior. The weights are scaled to have a mean of 1 within each stratum (or in the full sample if \code{strata} is not supplied).
-\itemize{
-\item \code{"multinom"}
 }
-
+\item{\code{"multinom"}}{
 Draws integer weights using \code{\link[=sample]{sample()}}, which samples unit indices with replacement and uses the tabulation of the indices as frequency weights. This is equivalent to drawing weights from a multinomial distribution. Using \code{wtype = "multinom"} is the same as using \code{boot::boot(., stype = "f")} instead of \code{fwb()} (i.e., the resulting estimates will be identical). When \code{strata} is supplied, unit indices are drawn with replacement within each stratum so that the sum of the weights in each stratum is equal to the stratum size.
-\itemize{
-\item \code{"poisson"}
 }
-
+\item{\code{"poisson"}}{
 Draws integer weights from a Poisson distribution with 1 degree of freedom using \code{\link[=rpois]{rpois()}}. This is an alternative to the multinomial weights that yields similar estimates (especially as the sample size grows) but can be faster. Note \code{strata} is ignored when using \code{"poisson"}.
-\itemize{
-\item \code{"mammen"}
 }
-
+\item{\code{"mammen"}}{
 Draws weights from a modification of the distribution described by Mammen (1983) for use in the wild bootstrap. These positive weights have a mean, variance, and skewness of 1, making them second-order accurate (in contrast to the usual exponential weights, which are only first-order accurate). The weights \eqn{w} are drawn such that \eqn{P(w=(3+\sqrt{5})/2)=(\sqrt{5}-1)/2\sqrt{5}} and \eqn{P(w=(3-\sqrt{5})/2)=(\sqrt{5}+1)/2\sqrt{5}}. The weights are scaled to have a mean of 1 within each stratum (or in the full sample if \code{strata} is not supplied).
+}
+}
 
 \code{"exp"} is the default due to it being the formulation described in Xu et al. (2020) and in the most formulations of the Bayesian bootstrap; it should be used if one wants to remain in line with these guidelines or to maintain a Bayesian flavor to the analysis, whereas \code{"mammen"} might be preferred for its frequentist operating characteristics, though its performance has not been studied in this context. \code{"multinom"} and \code{"poisson"} should only be used for comparison purposes.
 }

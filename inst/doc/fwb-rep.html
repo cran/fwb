@@ -341,51 +341,50 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 
 
-<p>Steps must be taken to ensure reproducibility when using
-<code>fwb</code>. Reproducibility ensures re-running the same analysis
-yields identical results. Because a random process is involved in
-generating the bootstrap weights, steps must be taken to ensure
-reproducibility is possible.</p>
+<p>Reproducibility ensures re-running the same analysis yields identical
+results. Because a random process is involved in generating the
+bootstrap weights with <code>fwb::fwb()</code>, steps must be taken to
+ensure reproducibility is possible.</p>
 <p>There are a few arguments to <code>fwb()</code> that are relevant for
 reproducibility. These are <code>statistic</code>, <code>simple</code>,
 and <code>cl</code>.</p>
-<p><code>statistic</code> is the function that is applied to each
-bootstrap dataset that returns the quantities of interest to be
-estimated. It can either have a non-random component or not; each case
+<ul>
+<li><p><code>statistic</code> is the function that is applied to each
+bootstrap dataset and returns the quantities of interest to be
+estimated. It can either have a random component or not; each case
 requires special attention. It is always safer to avoid having a random
 component in <code>statistic</code>. Most common regression functions to
 do not involve a random component, but some advanced models, like
-machine learning models, may have a random component. Do not ever
-include a call to <code>set.seed()</code> or supply a seed to
-<code>statistic</code>. If you are using parallelization for
-<code>fwb()</code>, do not use parallelization within
-<code>statistic</code>.</p>
-<p><code>simple</code> controls whether the bootstrap weights are
+machine learning models, may. Do not ever include a call to
+<code>set.seed()</code> or supply a seed to <code>statistic</code>. If
+you are using parallelization for <code>fwb()</code>, do not use
+parallelization within <code>statistic</code>.</p></li>
+<li><p><code>simple</code> controls whether the bootstrap weights are
 generated all at once (<code>simple = FALSE</code>) or generated
 separately within each bootstrap iteration (<code>simple = TRUE</code>).
-When <code>simple = FALSE</code>, generating of the weights occurs
-before any parallelization takes place or <code>statistic</code> is
-called, which means ensuring reproducibility is more straightforward.
-When <code>simple = TRUE</code>, generating of the weights occurs before
-the call to <code>statistic</code> in each bootstrap iteration,
-effectively giving <code>statistic</code> a random component. This can
-make it a bit more challenging to ensure reproducibility when using
+When <code>simple = FALSE</code>, the weights are generated before any
+parallelization takes place or <code>statistic</code> is called, which
+makes ensuring reproducibility more straightforward. When
+<code>simple = TRUE</code>, the weights are generated before the call to
+<code>statistic</code> in each bootstrap iteration, which can make it a
+bit more challenging to ensure reproducibility when using
 parallelization and adds even more challenges when
-<code>statistic</code> also has a random component.</p>
-<p><code>cl</code> controls whether and how parallelization takes place.
-It is passed directly to <code>pbapply::pblapply()</code>, which calls
-either <code>parallel::mcapply()</code>,
+<code>statistic</code> also has a random component.</p></li>
+<li><p><code>cl</code> controls whether and how parallelization takes
+place. It is passed directly to <code>pbapply::pblapply()</code>, which
+calls either <code>parallel::mclapply()</code>,
 <code>parallel::parLapply()</code>, or
-<code>future.apply::future_lapply()</code> depends on how it is
+<code>future.apply::future_lapply()</code>, depending on how it is
 specified. The usual arguments include an integer referring to the
 number of cores, which only works on Mac and triggers
-<code>parallel::mcapply()</code>; a <code>cluster</code> object (usually
-the result of a call to <code>parallel::makeCluster()</code> or related
-functions), which triggers <code>parallel::parLapply()</code>; or
-<code>&quot;future&quot;</code>, which uses a <code>future</code> backend (usually
-initialized using <code>future::plan()</code>). Each of these involves
-different requirements for ensuring reproducibility.</p>
-<p>This guide will proceed for combinations of these case.</p>
+<code>parallel::mclapply()</code>; a <code>cluster</code> object
+(usually the result of a call to <code>parallel::makeCluster()</code> or
+related functions), which triggers <code>parallel::parLapply()</code>;
+or <code>&quot;future&quot;</code>, which uses a <code>future</code> backend
+(usually initialized using <code>future::plan()</code>). Each of these
+involves different requirements for ensuring reproducibility.</p></li>
+</ul>
+<p>This guide will proceed for combinations of these scenarios.</p>
 <div id="case-1-no-parallelization-cl-null" class="section level3">
 <h3>Case 1: No parallelization (<code>cl = NULL</code>)</h3>
 <p>When no parallelization is used (i.e., <code>cl</code> is
@@ -393,9 +392,9 @@ unspecified, <code>NULL</code>, or <code>1</code>), all you need to do
 is call <code>set.seed()</code> before <code>fwb()</code> to ensure
 reproducibility. It doesn’t matter what <code>simple</code> or
 <code>statistic</code> do. This is probably the most common case. Just
-run the following to ensure reproducibility, replacing <code>###</code>
+run the following to ensure reproducibility, replacing <code>{N}</code>
 with your favorite integer.</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="do">###)</span></span>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">set.seed</span>({N})</span>
 <span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a>f.out <span class="ot">&lt;-</span> <span class="fu">fwb</span>(.)</span></code></pre></div>
 </div>
@@ -409,19 +408,21 @@ each cluster, so no special steps need to be taken beyond setting a
 seed. Note that <code>simple</code> is <code>TRUE</code> by default
 unless <code>wtype = &quot;multinom&quot;</code>, so this must be set manually.
 See below for a code example:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="do">###)</span></span>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">set.seed</span>({N})</span>
 <span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a></span>
 <span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>f.out <span class="ot">&lt;-</span> <span class="fu">fwb</span>(., <span class="at">simple =</span> <span class="cn">FALSE</span>)</span></code></pre></div>
 </div>
 <div id="case-3-cl-is-an-integer" class="section level3">
 <h3>Case 3: <code>cl</code> is an integer</h3>
 <p>When <code>cl</code> is an integer and the criteria for Case 2 are
-not met, one additional step is required for ensuring reproducibility.
-Again, all you need to do is use <code>set.seed()</code>, but you must
-call it with <code>kind = &quot;L&#39;Ecuyer-CMRG&quot;</code>, which is the only
-method appropriate for use across multiple clusters. See below for a
-code example:</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="do">###, &quot;L&#39;Ecuyer-CMRG&quot;)</span></span>
+not met (i.e., <code>simple = TRUE</code> or <code>statistic</code> has
+a random component), one additional step is required for ensuring
+reproducibility. Again, all you need to do is use
+<code>set.seed()</code>, but you must call it with
+<code>kind = &quot;L&#39;Ecuyer-CMRG&quot;</code>, which is the only method
+appropriate for use across multiple clusters. See below for a code
+example:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">set.seed</span>({N}, <span class="st">&quot;L&#39;Ecuyer-CMRG&quot;</span>)</span>
 <span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a></span>
 <span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a>f.out <span class="ot">&lt;-</span> <span class="fu">fwb</span>(., <span class="at">cl =</span> <span class="dv">3</span>)</span></code></pre></div>
 </div>
@@ -436,7 +437,7 @@ which you should not do yourself.) See below for a code example:</p>
 <div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">library</span>(future)</span>
 <span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a></span>
 <span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="fu">plan</span>(multisession, <span class="at">workers =</span> <span class="dv">3</span>)</span>
-<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="do">###, &quot;L&#39;Ecuyer-CMRG&quot;)</span></span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a><span class="fu">set.seed</span>({N}, <span class="st">&quot;L&#39;Ecuyer-CMRG&quot;</span>)</span>
 <span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a></span>
 <span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a>f.out <span class="ot">&lt;-</span> <span class="fu">fwb</span>(., <span class="at">cl =</span> <span class="st">&quot;future&quot;</span>)</span></code></pre></div>
 </div>
@@ -446,50 +447,56 @@ which you should not do yourself.) See below for a code example:</p>
 output of a call to <code>parallel::makeCluster()</code>,
 <code>parallel::makePSOCKcluster()</code>,
 <code>parallel::makeForkCluster()</code> or similar functions in
-<em>parallelly</em>), an additional step need to be taken to ensure
+<em>parallelly</em>), an additional step must be taken to ensure
 reproducibility. Unfortunately, you can’t use <code>set.seed()</code>;
 you have to use <code>parallel::clusterSetRNGStream()</code>, to which
-you supply the <code>cluster</code> object are your desired seed. See
+you supply the <code>cluster</code> object and your desired seed. See
 below for a code example:</p>
 <div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="fu">library</span>(parallel)</span>
 <span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a></span>
 <span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a>cl <span class="ot">&lt;-</span> <span class="fu">makeCluster</span>(<span class="dv">3</span>)</span>
-<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a><span class="fu">clusterSetRNGStream</span>(cl, <span class="do">###)</span></span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a><span class="fu">clusterSetRNGStream</span>(cl, {N})</span>
 <span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a></span>
 <span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a>f.out <span class="ot">&lt;-</span> <span class="fu">fwb</span>(., <span class="at">cl =</span> cl)</span></code></pre></div>
 </div>
 <div id="computing-bca-confidence-intervals" class="section level2">
-<h2>Computing <code>BCa</code> confidence intervals</h2>
-<p>Although the main purpose of considering reproducibility is ensure
+<h2>Computing BCa confidence intervals</h2>
+<p>Although the main purpose of considering reproducibility is to ensure
 that multiple runs of the same code produce identical results, there is
 another situation in which it can be important to be able to reproduce
-the weights, and that is when computing BCa confidence intervals using
-<code>fwb.ci(., type = &quot;bca&quot;)</code> or
+the weights, and that is when computing bias-corrected accelerated (BCa)
+confidence intervals using <code>fwb.ci(., type = &quot;bca&quot;)</code> or
 <code>summary(., ci.type = &quot;bca&quot;)</code>. BCa confidence intervals have
 the best statistical properties among the available bootstrap confidence
 intervals, but they require computing the influence each unit has on the
 bootstrap estimates, which requires re-generating the weights as they
 were generated by <code>fwb()</code>.</p>
 <p>There are some cases where you don’t have to do any special work to
-ensure BCa intervals are correctly computed. These include *
-<code>simple = FALSE</code>, regardless of parallelization or randomness
-in <code>statistic</code> * <code>simple = TRUE</code>, there is no
-randomness in <code>statistic</code>, and no parallelization is used *
-<code>simple = TRUE</code>, there is no randomness in
+ensure BCa intervals are correctly computed. These include:</p>
+<ul>
+<li><code>simple = FALSE</code>, regardless of parallelization or
+randomness in <code>statistic</code></li>
+<li><code>simple = TRUE</code>, there is no randomness in
+<code>statistic</code>, and no parallelization is used</li>
+<li><code>simple = TRUE</code>, there is no randomness in
 <code>statistic</code>, and <code>cl</code> is an integer or
-<code>&quot;future&quot;</code></p>
+<code>&quot;future&quot;</code></li>
+</ul>
 <p>In these cases, <code>fwb()</code> saves the state of the random seed
-that was used to originally generate the weights, recalls that seed to
-re-generate the weights, and then computes the required statistics for
-the BCa interval without requiring any extra involvement by the
-user.</p>
+that was used to originally generate the weights, and
+<code>fwb.ci()</code> recalls that seed to re-generate the weights and
+then computes the required statistics for the BCa interval without
+requiring any extra involvement by the user.</p>
 <p>Otherwise, when the following condition is met, an additional step is
-required: * <code>simple = TRUE</code>, there is no randomness in
+required:</p>
+<ul>
+<li><code>simple = TRUE</code>, there is no randomness in
 <code>statistic</code>, and <code>cl</code> is a <code>cluster</code>
-object</p>
+object</li>
+</ul>
 <p>In this case, you need to call
-<code>clusterSetRNGStream(cl, ###)</code> with the same seed as as was
-used prior to <code>fwb()</code> immediately before calling
+<code>parallel::clusterSetRNGStream(cl, {N})</code> with the same seed
+as as was used prior to <code>fwb()</code> immediately before calling
 <code>fwb.ci()</code> or <code>summary()</code>.</p>
 <p>When <code>simple = TRUE</code> and there is any randomness in
 <code>statistic</code>, it is not possible to re-generate the weights
