@@ -4,7 +4,7 @@
 #'
 #' @param fwb.out an `fwb` object; the output of a call to [fwb()].
 #' @param conf the desired confidence level. Default is .95 for 95% confidence intervals.
-#' @param type the type of confidence interval desired. Allowable options include `"norm"` (normal approximation), `"basic"` (basic interval), `"perc"` (percentile interval), `"bc"` (bias-correct percentile interval), and `"bca"` (BCa interval). More than one is allowed. Can also be `"all"` to request all of them. BCa intervals require that the number of bootstrap replications is larger than the sample size.
+#' @param type the type of confidence interval desired. Allowable options include `"wald"` (Wald interval), `"norm"` (normal approximation), `"basic"` (basic interval), `"perc"` (percentile interval), `"bc"` (bias-correct percentile interval), and `"bca"` (BCa interval). More than one is allowed. Can also be `"all"` to request all of them. BCa intervals require that the number of bootstrap replications is larger than the sample size.
 #' @param index the index of the position of the quantity of interest in `fwb.out$t0` if more than one was specified in `fwb()`. Only one value is allowed at a time. By default the first statistic is used.
 #' @param h a function defining a transformation. The intervals are calculated on the scale of `h(t)` and the inverse function `hinv` applied to the resulting intervals. It must be a function of one variable only and for a vector argument, it must return a vector of the same length. Default is the identity function.
 #' @param hinv a function, like `h`, which returns the inverse of `h`. It is used to transform the intervals calculated on the scale of `h(t)` back to the original scale. The default is the identity function. If `h` is supplied but `hinv` is not, then the intervals returned will be on the transformed scale.
@@ -16,27 +16,41 @@
 #' \item{t0}{the observed value of the statistic on the same scale as the intervals (i.e., after applying `h` and then `hinv`.}
 #' \item{call}{the call to `fwb.ci()`.}
 #'
-#' There will be additional components named after each confidence interval type requested. For `"norm"`, this is a matrix with one row containing the confidence level and the two confidence interval limits. For the others, this is a matrix with one row containing the confidence level, the indices of the two order statistics used in the calculations, and the confidence interval limits.
+#' There will be additional components named after each confidence interval type requested. For `"wald"` and `"norm"`, this is a matrix with one row containing the confidence level and the two confidence interval limits. For the others, this is a matrix with one row containing the confidence level, the indices of the two order statistics used in the calculations, and the confidence interval limits.
 #'
 #' @details `fwb.ci()` functions similarly to \pkgfun{boot}{boot.ci} in that it takes in a bootstrapped object and computes confidence intervals. This interface is a bit old-fashioned, but was designed to mimic that of `boot.ci()`. For a more modern interface, see [summary.fwb()].
 #'
 #' The bootstrap intervals are defined as follows, with \eqn{\alpha =} 1 - `conf`, \eqn{t_0} the estimate in the original sample, \eqn{\hat{t}} the average of the bootstrap estimates, \eqn{s_t} the standard deviation of the bootstrap estimates, \eqn{t^{(i)}} the set of ordered estimates with \eqn{i} corresponding to their quantile, and \eqn{z_\frac{\alpha}{2}} and \eqn{z_{1-\frac{\alpha}{2}}} the upper and lower critical \eqn{z} scores.
 #'
-#' * `"norm"` (normal approximation): \eqn{[2t_0 - \hat{t} + s_t z_\frac{\alpha}{2}, 2t_0 - \hat{t} + s_t z_{1-\frac{\alpha}{2}}]}
+#' \describe{
+#' \item{`"wald"`}{
+#'   \deqn{\left[t_0 + s_t z_\frac{\alpha}{2}, t_0 + s_t z_{1-\frac{\alpha}{2}}\right]}
+#'   This method is valid when the statistic is normally distributed around the estimate.
+#' }
+#' \item{`"norm"` (normal approximation)}{
+#'   \deqn{\left[2t_0 - \hat{t} + s_t z_\frac{\alpha}{2}, 2t_0 - \hat{t} + s_t z_{1-\frac{\alpha}{2}}\right]}
 #'
 #' This involves subtracting the "bias" (\eqn{\hat{t} - t_0}) from the estimate \eqn{t_0} and using a standard Wald-type confidence interval. This method is valid when the statistic is normally distributed.
+#' }
+#' \item{`"basic"`}{
+#'   \deqn{\left[2t_0 - t^{(1-\frac{\alpha}{2})}, 2t_0 - t^{(\frac{\alpha}{2})}\right]}
+#' }
 #'
-#' * `"basic"`: \eqn{[2t_0 - t^{(1-\frac{\alpha}{2})}, 2t_0 - t^{(\frac{\alpha}{2})}]}
+#' \item{`"perc"` (percentile confidence interval)}{
+#'   \deqn{\left[t^{(\frac{\alpha}{2})}, t^{(1-\frac{\alpha}{2})}\right]}
+#' }
 #'
-#' * `"perc"` (percentile confidence interval): \eqn{[t^{(\frac{\alpha}{2})}, t^{(1-\frac{\alpha}{2})}]}
-#'
-#' * `"bc"` (bias-corrected percentile confidence interval): \eqn{[t^{(l)}, t^{(u)}]}
+#' \item{`"bc"` (bias-corrected percentile confidence interval)}{
+#'   \deqn{\left[t^{(l)}, t^{(u)}\right]}
 #'
 #' \eqn{l = \Phi\left(2z_0 + z_\frac{\alpha}{2}\right)}, \eqn{u = \Phi\left(2z_0 + z_{1-\frac{\alpha}{2}}\right)}, where \eqn{\Phi(.)} is the normal cumulative density function (i.e., [pnorm()]) and \eqn{z_0 = \Phi^{-1}(q)} where \eqn{q} is the proportion of bootstrap estimates less than the original estimate \eqn{t_0}. This is similar to the percentile confidence interval but changes the specific quantiles of the bootstrap estimates to use, correcting for bias in the original estimate. It is described in Xu et al. (2020). When \eqn{t^0} is the median of the bootstrap distribution, the `"perc"` and `"bc"` intervals coincide.
+#' }
+#' \item{`"bca"` (bias-corrected and accelerated confidence interval)}{
+#'   \deqn{\left[t^{(l)}, t^{(u)}\right]}
 #'
-#' * `"bca"` (bias-corrected and accelerated confidence interval): \eqn{[t^{(l)}, t^{(u)}]}
-#'
-#' \eqn{l = \Phi\left(z_0 + \frac{z_0 + z_\frac{\alpha}{2}}{1-a(z_0+z_\frac{\alpha}{2})}\right)}, \eqn{u = \Phi\left(z_0 + \frac{z_0 + z_{1-\frac{\alpha}{2}}}{1-a(z_0+z_{1-\frac{\alpha}{2}})}\right)}, using the same definitions as above, but with the additional acceleration parameter \eqn{a}, where \eqn{a = \frac{1}{6}\frac{\sum{L^3}}{(\sum{L^2})^{3/2}}}. \eqn{L} is the empirical influence value of each unit, which is computed using the regression method described in \pkgfun{boot}{empinf}. When \eqn{a=0}, the `"bca"` and `"bc"` intervals coincide. The acceleration parameter corrects for bias and skewness in the statistic. It can only be used when clusters are absent and the number of bootstrap replications is larger than the sample size. Note that BCa intervals cannot be requested when `simple = TRUE` and there is randomness in thew `statistic` supplied to `fwb()`.
+#' \eqn{l = \Phi\left(z_0 + \frac{z_0 + z_\frac{\alpha}{2}}{1-a(z_0+z_\frac{\alpha}{2})}\right)}, \eqn{u = \Phi\left(z_0 + \frac{z_0 + z_{1-\frac{\alpha}{2}}}{1-a(z_0+z_{1-\frac{\alpha}{2}})}\right)}, using the same definitions as above, but with the additional acceleration parameter \eqn{a}, where \eqn{a = \frac{1}{6}\frac{\sum{L^3}}{(\sum{L^2})^{3/2}}}. \eqn{L} is the empirical influence value of each unit, which is computed using the regression method described in \pkgfun{boot}{empinf}. When \eqn{a=0}, the `"bca"` and `"bc"` intervals coincide. The acceleration parameter corrects for bias and skewness in the statistic. It can only be used when clusters are absent and the number of bootstrap replications is larger than the sample size. Note that BCa intervals cannot be requested when `simple = TRUE` and there is randomness in the `statistic` supplied to `fwb()`.
+#' }
+#' }
 #'
 #' Interpolation on the normal quantile scale is used when a non-integer order statistic is required, as in `boot::boot.ci()`. Note that unlike with `boot::boot.ci()`, studentized confidence intervals (`type = "stud"`) are not allowed.
 #'
@@ -78,45 +92,52 @@ fwb.ci <- function(fwb.out, conf = .95, type = "bc", index = 1L,
 
   chk::chk_is(fwb.out, "boot")
   chk::chk_number(conf)
-  chk::chk_range(conf, c(.5, 1), inclusive = FALSE)
+  chk::chk_range(conf, c(0, 1), inclusive = FALSE)
 
   chk::chk_character(type)
-  type <- match_arg(type, c("perc", "bc", "norm", "basic", "bca", "all"),
+  type <- match_arg(type, c(.allowed_ci.types(), "all"),
                     several.ok = TRUE)
 
   if (any(type == "all")) {
-    type <- c("perc", "bc", "norm", "basic", "bca")
+    if (is_null(fwb.out[["cluster"]])) {
+      type <- .allowed_ci.types()
+    }
+    else {
+      type <- setdiff(.allowed_ci.types(), "bca")
+    }
   }
 
-  if (any(type == "bca") &&
-      fwb.out[["R"]] <= nrow(fwb.out[["data"]])) {
-    msg <- "BCa confidence intervals cannot be computed when there are fewer bootstrap replications than units in the original dataset"
+  if (any(type == "bca")) {
+    msg <- character(0L)
 
-    if (all(type == "bca")) {
-      .err(msg)
+    if (is_not_null(fwb.out[["cluster"]])) {
+      msg <- c(msg, "BCa confidence intervals cannot be used with clusters")
     }
 
-    .wrn(msg)
-    type <- type[type != "bca"]
-  }
-
-  if (any(type == "bca") &&
-      isTRUE(attr(fwb.out, "simple", TRUE)) &&
-      isTRUE(attr(fwb.out, "random_statistic", TRUE))) {
-    msg <- 'BCa confidence intervals cannot be computed when there is randomness in `statistic` and `simple = TRUE` in the call to `fbw()`. See `vignette("fwb-rep")` for details'
-
-    if (all(type == "bca")) {
-      .err(msg)
+    if (fwb.out[["R"]] <= nrow(fwb.out[["data"]])) {
+      msg <- c(msg, "BCa confidence intervals cannot be computed when there are fewer bootstrap replications than units in the original dataset")
     }
 
-    .wrn(msg)
-    type <- type[type != "bca"]
+    if (isTRUE(attr(fwb.out, "simple", TRUE)) &&
+        isTRUE(attr(fwb.out, "random_statistic", TRUE))) {
+      msg <- c(msg, 'BCa confidence intervals cannot be computed when there is randomness in `statistic` and `simple = TRUE` in the call to `fbw()`. See `vignette("fwb-rep")` for details')
+    }
+
+    if (is_not_null(msg)) {
+      if (all(type == "bca")) {
+        .err(msg[1L])
+      }
+
+      .wrn(msg[1L])
+
+      type <- setdiff(type, "bca")
+    }
   }
 
   index <- check_index(index, fwb.out[["t"]])
 
+  t <- fwb.out[["t"]][, index, drop = FALSE]
   t0 <- fwb.out[["t0"]][index]
-  t <- fwb.out[["t"]][, index]
 
   if (anyNA(t)) {
     .err("some bootstrap estimates are `NA`; cannot calculate confidence intervals")
@@ -136,32 +157,16 @@ fwb.ci <- function(fwb.out, conf = .95, type = "bc", index = 1L,
   }
 
   fins <- which(is.finite(t))
-  t <- t[fins]
-  R <- length(t)
-  t0 <- h(t0)
-  t <- h(t)
 
-  output <- c(list(R = R, t0 = hinv(t0), call = call),
+  output <- c(list(R = length(fins), t0 = hinv(t0), call = call),
               setNames(vector("list", length(type)), type))
 
-  if (any(type == "bc")) {
-    output[["bc"]] <- bc.ci(t, t0, conf, hinv = hinv)
+  if (!identical(t, h(t))) {
+    .err("`h` can only be `identity()`. Other transformations are not supported")
   }
 
-  if (any(type == "perc")) {
-    output[["perc"]] <- perc.ci(t, t0, conf, hinv = hinv)
-  }
-
-  if (any(type == "norm")) {
-    output[["norm"]] <- norm.ci(t, t0, conf, hinv = hinv)
-  }
-
-  if (any(type == "basic")) {
-    output[["basic"]] <- basic.ci(t, t0, conf, hinv = hinv)
-  }
-
-  if (any(type == "bca")) {
-    output[["bca"]] <- bca.ci(t, t0, fwb.out, index, conf, hinv = hinv, h = h)
+  for (i in type) {
+    output[[i]] <- compute_ci(i, t, t0, conf, 1L, hinv, fwb.out)
   }
 
   attr(output, "conf") <- conf
@@ -176,12 +181,12 @@ fwb.ci <- function(fwb.out, conf = .95, type = "bc", index = 1L,
 #' @param x an `fwbci` object; the output of a call to `fwb.ci()`.
 #'
 #' @exportS3Method print fwbci
-print.fwbci <- function (x, hinv = NULL, ...) {
+print.fwbci <- function(x, hinv = NULL, ...) {
   ci.out <- x
   cl <- ci.out[["call"]]
 
   ci.types <- intersect(names(ci.out)[lengths(ci.out) > 0L],
-                        c("norm", "basic", "perc", "bc", "bca"))
+                        .allowed_ci.types())
 
   ntypes <- length(ci.types)
   t0 <- ci.out[["t0"]]
@@ -207,6 +212,10 @@ print.fwbci <- function (x, hinv = NULL, ...) {
                       ci.types)
 
   basrg <- bcperg <- perg <- bcarg <- NULL
+
+  if ("wald" %in% ci.types) {
+    intlabs["wald"] <- "Wald"
+  }
 
   if ("norm" %in% ci.types) {
     intlabs["norm"] <- "Normal"
@@ -235,7 +244,7 @@ print.fwbci <- function (x, hinv = NULL, ...) {
   level <- 100 * attr(ci.out, "conf", TRUE)
 
   intervals <- do.call("rbind", lapply(ci.types, function(i) {
-    hinv(.tail(ci.out[[i]][1L,], 2L))
+    hinv(.tail(ci.out[[i]][1L, ], 2L))
   }))
 
   intervals_text <- apply(format(round(intervals, digs)), 1L, function(z) {
@@ -350,7 +359,7 @@ get_ci <- function(x, type = "all") {
   x <- name_trans(x, "student", "stud")
   x <- name_trans(x, "percent", "perc")
 
-  allowed_cis <- intersect(c("perc", "bc", "stud", "norm", "basic", "bca"),
+  allowed_cis <- intersect(.allowed_ci.types(),
                            names(x))
 
   if ("all" %in% type) {
@@ -371,160 +380,3 @@ get_ci <- function(x, type = "all") {
 
   out
 }
-
-perc.ci <- function(t, t0, conf = 0.95, hinv = identity) {
-  alpha <- (1 + c(-conf, conf)) / 2
-  qq <- norm.inter(t, alpha)
-  cbind(conf, matrix(qq[, 1L], ncol = 2L), matrix(hinv(qq[, 2L]), ncol = 2L))
-}
-
-norm.inter <- function(t, alpha) {
-  t <- t[is.finite(t)]
-  R <- length(t)
-  rk <- (R + 1) * alpha
-  if (!all(rk > 1 & rk < R)) {
-    .wrn("extreme order statistics used as endpoints")
-  }
-  k <- trunc(rk)
-  inds <- seq_along(k)
-  out <- inds
-  kvs <- k[k > 0 & k < R]
-  tstar <- sort(t, partial = sort(union(c(1, R), c(kvs, kvs + 1))))
-  ints <- (k == rk)
-  if (any(ints)) {
-    out[inds[ints]] <- tstar[k[inds[ints]]]
-  }
-  out[k == 0] <- tstar[1L]
-  out[k == R] <- tstar[R]
-  not <- function(v) xor(rep(TRUE, length(v)), v)
-  temp <- inds[not(ints) & k != 0 & k != R]
-  temp1 <- qnorm(alpha[temp])
-  temp2 <- qnorm(k[temp]/(R + 1))
-  temp3 <- qnorm((k[temp] + 1) / (R + 1))
-  tk <- tstar[k[temp]]
-  tk1 <- tstar[k[temp] + 1L]
-  out[temp] <- tk + (temp1 - temp2)/(temp3 - temp2) * (tk1 - tk)
-  cbind(round(rk, 2), out)
-}
-
-bc.ci <- function(t, t0, conf = .95, hinv = identity) {
-  alpha <- (1 + c(-conf, conf)) / 2
-  s <- min(max(1, sum(t < t0)), length(t) - 1)
-  w <- qnorm(s / length(t))
-
-  zalpha <- qnorm(alpha)
-
-  adj.alpha <- pnorm(w + (w + zalpha))
-
-  qq <- norm.inter(t, adj.alpha)
-  cbind(conf, matrix(qq[, 1L], ncol = 2L), matrix(hinv(qq[, 2]), ncol = 2L))
-}
-
-norm.ci <- function(t, t0, conf = 0.95, hinv = identity) {
-  bias <- mean(t) - t0
-
-  merr <- sd(t) * qnorm((1 + conf) / 2)
-  cbind(conf, hinv(t0 - bias - merr), hinv(t0 - bias + merr))
-}
-
-basic.ci <- function (t, t0, conf = 0.95, hinv = identity) {
-  alpha <- (1 + c(-conf, conf)) / 2
-  qq <- norm.inter(t, rev(alpha))
-  cbind(conf,
-        matrix(qq[, 1L], ncol = 2L),
-        matrix(hinv(2 * t0 - qq[, 2L]), ncol = 2L))
-}
-
-bca.ci <- function(t, t0, boot.out, index, conf = .95, hinv = identity, h = identity) {
-  if (is_not_null(boot.out[["cluster"]])) {
-    .err("the BCa confidence interval cannot be used with clusters")
-  }
-
-  alpha <- (1 + c(-conf, conf)) / 2
-  s <- min(max(1, sum(t < t0)), length(t) - 1)
-  w <- qnorm(s / length(t))
-
-  zalpha <- qnorm(alpha)
-
-  L <- empinf.reg(boot.out, t = t)
-
-  a <- sum(L^3)/(6 * sum(L^2)^1.5)
-
-  if (!is.finite(a)) {
-    .err("estimated adjustment 'a' is NA")
-  }
-
-  adj.alpha <- pnorm(w + (w + zalpha)/(1 - a * (w + zalpha)))
-  qq <- norm.inter(t, adj.alpha)
-
-  cbind(conf, matrix(qq[, 1L], ncol = 2L), matrix(hinv(h(qq[, 2L])), ncol = 2L))
-}
-
-empinf.reg <- function(boot.out, t) {
-  fins <- which(is.finite(t))
-  t <- t[fins]
-  n <- NROW(boot.out[["data"]])
-  f <- boot.array(boot.out)[fins, ]
-  X <- f / n
-  X[, 1L] <- 1
-  beta <- .lm.fit(x = X, y = t)$coefficients[-1L]
-  l <- rep.int(0, n)
-  l[-1L] <- beta
-
-  l - mean(l)
-}
-
-boot.array <- function(boot.out) {
-  if (identical(attr(boot.out, "boot_type", TRUE), "boot")) {
-    rlang::check_installed("boot")
-    return(boot::boot.array(boot.out))
-  }
-
-  # genv <- globalenv()
-  #
-  # #Return seed to its prior state after generating weights using seed from boot.out
-  # old_seed <- get(".Random.seed", envir = genv, inherits = FALSE)
-  # on.exit(suspendInterrupts({
-  #   if (is_null(old_seed)) {
-  #     rm(".Random.seed", envir = genv, inherits = FALSE)
-  #   }
-  #   else {
-  #     assign(".Random.seed", value = old_seed, envir = genv, inherits = FALSE)
-  #   }
-  # }))
-  #
-  # assign(".Random.seed", value = boot.out[["seed"]], envir = genv)
-
-  gen_weights <- make_gen_weights(boot.out[["wtype"]])
-
-  n <- nrow(boot.out[["data"]])
-  R <- boot.out[["R"]]
-
-  if (!isTRUE(attr(boot.out, "simple", TRUE)) || is_null(attr(boot.out, "cl", TRUE))) {
-    with_seed_preserved({
-      return(gen_weights(n, R, boot.out[["strata"]]))
-    }, new_seed = boot.out[["seed"]])
-  }
-
-  if (isTRUE(attr(boot.out, "simple", TRUE)) &&
-      isTRUE(attr(boot.out, "random_statistic", TRUE))) {
-    .wrn('bootstrap weights cannot be repliably re-generated when there is randomness in `statistic` and `simple = TRUE` in the call to `fbw()`. See `vignette("fwb-rep")` for details')
-  }
-
-  FUN <- function(i) {
-    drop(gen_weights(n, 1L, boot.out[["strata"]]))
-  }
-
-  opb <- pbapply::pboptions(type = "none")
-  on.exit(pbapply::pboptions(opb))
-
-  #Run bootstrap
-  with_seed_preserved({
-    if (identical(attr(boot.out, "cl", TRUE), "future"))
-      do.call("rbind", pbapply::pblapply(seq_len(R), FUN, cl = "future", future.seed = TRUE))
-    else
-      do.call("rbind", pbapply::pblapply(seq_len(R), FUN, cl = attr(boot.out, "cl", TRUE)))
-  }, new_seed = boot.out[["seed"]])
-}
-
-

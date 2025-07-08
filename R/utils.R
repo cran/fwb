@@ -27,6 +27,16 @@ fmt.prc <- function(probs, digits = 3L) {
   paste(format(100 * probs, trim = TRUE, scientific = FALSE, digits = digits), "%")
 }
 
+squish <- function(p, lo = 1e-6, hi = 1 - lo) {
+  if (lo > -Inf)
+    p[p < lo] <- lo
+
+  if (hi < Inf)
+    p[p > hi] <- hi
+
+  p
+}
+
 check_index <- function(index, t, several.ok = FALSE) {
   if (is_null(index)) {
     return(1L)
@@ -78,7 +88,8 @@ check_index <- function(index, t, several.ok = FALSE) {
     index <- match(index, colnames(t))
 
     if (anyNA(index)) {
-      .err("all entries in `index` must be the names of available statistics to compute.\n  The following are allowed: ", paste(add_quotes(colnames(t), 2L), collapse = ", "))
+      .err("all entries in `index` must be the names of available statistics to compute.\n  The following are allowed: ",
+           toString(add_quotes(colnames(t), 2L)))
     }
   }
 
@@ -150,7 +161,7 @@ add_quotes <- function(x, quotes = 2L) {
   }
 
   if (!chk::vld_count(quotes) || quotes > 2L) {
-    stop("`quotes` must be boolean, 1, 2, or a string.")
+    .err("`quotes` must be boolean, 1, 2, or a string")
   }
 
   if (quotes == 0L) {
@@ -173,7 +184,7 @@ match_arg <- function(arg, choices, several.ok = FALSE) {
   #Replaces match.arg() but gives cleaner error message and processing
   #of arg.
   if (missing(arg)) {
-    stop("No argument was supplied to match_arg.")
+    .err("no argument was supplied to `match_arg()`")
   }
 
   arg.name <- deparse1(substitute(arg), width.cutoff = 500L)
@@ -298,15 +309,15 @@ with_seed_preserved <- function(expr, new_seed = NULL) {
   }
   else {
     on.exit({
-      RNGkind <- get("RNGkind")
-      RNGkind(old_seed$rng_kind[[1L]], normal.kind = old_seed$rng_kind[[2L]])
+      .RNGkind <- get("RNGkind")
+      .RNGkind(old_seed$rng_kind[[1L]], normal.kind = old_seed$rng_kind[[2L]])
       sample_kind <- old_seed$rng_kind[[3L]]
 
       if (identical(sample_kind, "Rounding")) {
-        suppressWarnings(RNGkind(sample.kind = sample_kind))
+        suppressWarnings(.RNGkind(sample.kind = sample_kind))
       }
       else {
-        RNGkind(sample.kind = sample_kind)
+        .RNGkind(sample.kind = sample_kind)
       }
 
       assign(".Random.seed", old_seed$random_seed, globalenv())
