@@ -2,7 +2,7 @@
 #'
 #' `summary()` creates a regression summary-like table that displays the bootstrap estimates, their empirical standard errors, their confidence intervals, and, optionally, p-values for tests against a null value. `confint()` produces just the confidence intervals, and is called internally by `summary()`.
 #'
-#' @param object an `fwb` object; the output of a call to [fwb()].
+#' @param object an `<fwb>` object; the output of a call to [fwb()].
 #' @param conf,level the desired confidence level. Default is .95 for 95% confidence intervals. Set to 0 to prevent calculation of confidence intervals.
 #' @param ci.type the type of confidence interval desired. Allowable options include `"wald"` (Wald interval), `"norm"` (normal approximation), `"basic"` (basic interval), `"perc"` (percentile interval), `"bc"` (bias-corrected percentile interval), and `"bca"` (bias-corrected and accelerated \[BCa\] interval). Only one is allowed. BCa intervals require the number of bootstrap replications to be larger than the sample size. See [fwb.ci()] for details. The default is `"bc"`. Ignored if both `conf = 0` and `p.values = FALSE`.
 #' @param index,parm the index or indices of the position of the quantity of interest if more than one was specified in `fwb()`. Default is to display all quantities.
@@ -12,7 +12,7 @@
 #' @param ... ignored.
 #'
 #' @return
-#' For `summary()`, a `summary.fwb` object, which is a matrix with the following columns:
+#' For `summary()`, a `<summary.fwb>` object, which is a matrix with the following columns:
 #' * `Estimate`: the statistic estimated in the original sample
 #' * `Std. Error`: the standard deviation of the bootstrap estimates
 #' * `CI {L}%` and `CI {U}%`: the upper and lower confidence interval bounds computed using the argument to `ci.type` (only when `conf` is not 0).
@@ -26,7 +26,7 @@
 #'
 #' Simultaneous confidence intervals are computed using the "sup-t" confidence band, which involves modifying the confidence level so that the intersection of all the adjusted confidence intervals contain the whole parameter vector with the specified coverage. This will always be less conservative than Bonferroni or Holm adjustment. See Olea and Plagborg-Møller (2019) for details on implementation for Wald and percentile intervals. Simultaneous p-values are computed by inverting the simultaneous bands. Simultaneous inference is only allowed when `ci.type` is `"wald"` or `"perc"` and `index` has length greater than 1. When `ci.type = "wald"`, the \pkg{mvtnorm} package must be installed.
 #'
-#' `tidy()` and `print()` methods are available for `summary.fwb` objects.
+#' `tidy()` and `print()` methods are available for `<summary.fwb>` objects.
 #'
 #' @seealso [fwb()] for performing the fractional weighted bootstrap; [fwb.ci()] for computing multiple confidence intervals for a single bootstrapped quantity
 #'
@@ -59,30 +59,31 @@
 summary.fwb <- function(object, conf = .95, ci.type = "bc", p.value = FALSE,
                         index = seq_len(ncol(object$t)), null = 0, simultaneous = FALSE, ...) {
 
-  chk::chk_number(conf)
-  chk::chk_range(conf, c(0, 1), inclusive = TRUE)
+  arg::arg_number(conf)
+  arg::arg_between(conf, c(0, 1), inclusive = c(TRUE, FALSE))
 
-  chk::chk_flag(p.value)
+  arg::arg_flag(p.value)
 
   index <- check_index(index, object[["t"]], several.ok = TRUE)
 
   if (p.value || conf > 0) {
-    chk::chk_string(ci.type)
-    ci.type <- match_arg(ci.type, .allowed_ci.types())
+    ci.type <- arg::match_arg(ci.type, .allowed_ci.types())
 
     if (length(index) <= 1L) {
       simultaneous <- FALSE
     }
 
-    chk::chk_flag(simultaneous)
+    arg::arg_flag(simultaneous)
 
     if (simultaneous) {
-      if (!ci.type %in% c("perc", "wald")) {
-      .err('simultaneous inference can only be used when `ci.type` is `"wald"` or `"perc"`')
+      simul_citype_ok <- c("wald", "perc")
+
+      if (!ci.type %in% simul_citype_ok) {
+        arg::err("simultaneous inference can only be used when {.arg ci.type} is {.or {.val {simul_citype_ok}}}")
       }
 
       if (ci.type == "wald" && conf > 0 && conf <= .5) {
-        .err('`conf` must be greater than .5 to use with `simultaneous = TRUE` and `ci.type = "wald"`')
+        arg::err('{.arg conf} must be greater than .5 to use with {.code simultaneous = TRUE} and {.code ci.type = "wald"}')
       }
     }
   }
@@ -95,8 +96,6 @@ summary.fwb <- function(object, conf = .95, ci.type = "bc", p.value = FALSE,
   out[, "Std. Error"] <- apply(object[["t"]][, index, drop = FALSE], 2L, sd)
 
   if (conf > 0) {
-    chk::chk_lt(conf, 1)
-
     pct <- fmt.prc(c((1 - conf) / 2, 1 - (1 - conf) / 2))
 
     ci <- confint.fwb(object, parm = index, level = conf, ci.type = ci.type,
@@ -108,7 +107,7 @@ summary.fwb <- function(object, conf = .95, ci.type = "bc", p.value = FALSE,
   }
 
   if (p.value) {
-    chk::chk_number(null)
+    arg::arg_number(null)
 
     if (ci.type == "wald") {
       z <- (out[, "Estimate"] - null) / out[, "Std. Error"]
@@ -145,9 +144,8 @@ summary.fwb <- function(object, conf = .95, ci.type = "bc", p.value = FALSE,
 #' @rdname summary.fwb
 confint.fwb <- function(object, parm, level = .95, ci.type = "bc", simultaneous = FALSE, ...) {
 
-  chk::chk_number(level)
-  chk::chk_range(level, c(0, 1), inclusive = FALSE)
-  chk::chk_string(ci.type)
+  arg::arg_number(level)
+  arg::arg_between(level, c(0, 1), inclusive = FALSE)
 
   if (missing(parm)) {
     parm <- seq_len(ncol(object$t))
@@ -159,17 +157,19 @@ confint.fwb <- function(object, parm, level = .95, ci.type = "bc", simultaneous 
     simultaneous <- FALSE
   }
 
-  chk::chk_flag(simultaneous)
+  arg::arg_flag(simultaneous)
 
-  ci.type <- match_arg(ci.type, .allowed_ci.types())
+  ci.type <- arg::match_arg(ci.type, .allowed_ci.types())
 
   if (simultaneous) {
-    if (!ci.type %in% c("perc", "wald")) {
-      .err('simultaneous inference can only be used when `ci.type` is `"wald"` or `"perc"`')
+    simul_citype_ok <- c("wald", "perc")
+
+    if (!ci.type %in% simul_citype_ok) {
+      arg::err("simultaneous inference can only be used when {.arg ci.type} is {.or {.val {simul_citype_ok}}}")
     }
 
     if (ci.type == "wald" && level <= .5) {
-      .err('`level` must be greater than .5 to use with `simultaneous = TRUE` and `ci.type = "wald"`')
+      arg::err('{.arg level} must be greater than .5 to use with {.code simultaneous = TRUE} and {.code ci.type = "wald"}')
     }
 
     new_level <- simultaneous_ci_level(object, level, index, ci.type)
@@ -181,6 +181,7 @@ confint.fwb <- function(object, parm, level = .95, ci.type = "bc", simultaneous 
   ci.out <- compute_ci(ci.type, t = object[["t"]], t0 = object[["t0"]],
                        conf = new_level, index = index, boot.out = object)
 
+  # Label CIs with original levels
   pct <- fmt.prc(c((1 - level) / 2, 1 - (1 - level) / 2))
 
   out <- matrix(NA_real_, nrow = length(index), ncol = 2L,
@@ -198,9 +199,9 @@ confint.fwb <- function(object, parm, level = .95, ci.type = "bc", simultaneous 
 
 #' @exportS3Method print summary.fwb
 print.summary.fwb <- function(x, digits = 3L, ...) {
-  has.p <- is_not_null(attr(x, "null", TRUE))
-  has.ci <- attr(x, "conf", TRUE) > 0
-  has.z <- has.p && identical(attr(x, "ci.type", TRUE), "wald")
+  has.p <- is_not_null(.attr(x, "null"))
+  has.ci <- .attr(x, "conf") > 0
+  has.z <- has.p && identical(.attr(x, "ci.type"), "wald")
 
   stats::printCoefmat(x, digits = digits,
                       cs.ind = if (has.ci) 1:4 else 1:2,
@@ -213,9 +214,9 @@ print.summary.fwb <- function(x, digits = 3L, ...) {
 #' @importFrom generics tidy
 #' @exportS3Method tidy summary.fwb
 tidy.summary.fwb <- function(x, ...) {
-  has.p <- is_not_null(attr(x, "null", TRUE))
-  has.ci <- attr(x, "conf", TRUE) > 0
-  has.z <- has.p && identical(attr(x, "ci.type", TRUE), "wald")
+  has.p <- is_not_null(.attr(x, "null"))
+  has.ci <- .attr(x, "conf") > 0
+  has.z <- has.p && identical(.attr(x, "ci.type"), "wald")
 
   x <- as.data.frame(x)
 

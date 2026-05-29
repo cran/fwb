@@ -7,7 +7,7 @@
 fwb.array(fwb.out)
 }
 \arguments{
-\item{fwb.out}{an \code{fwb} object; the output of a call to \code{\link[=fwb]{fwb()}}.}
+\item{fwb.out}{an \verb{<fwb>} object; the output of a call to \code{\link[=fwb]{fwb()}}.}
 }
 \value{
 A matrix with \code{R} rows and \code{n} columns, where \code{R} is the number of bootstrap replications and \code{n} is the number of observations in \code{boot.out$data}.
@@ -49,5 +49,10 @@ empinf <- lm.fit(x = fwb_weights / ncol(fwb_weights),
 empinf <- sweep(empinf, 2L, colMeans(empinf))
 }
 \seealso{
-\code{\link[=fwb]{fwb()}} for performing the fractional weighted bootstrap; \pkgfun{boot}{boot.array} for the equivalent function in \pkg{boot}; \code{vignette("fwb-rep")} for information on replicability.
+\itemize{
+\item \code{\link[=fwb]{fwb()}} for performing the fractional weighted bootstrap
+\item \pkgfun{boot}{boot.array} for the equivalent function in \pkg{boot}
+}
+
+See \code{vignette("fwb-rep")} for information on replicability.
 }

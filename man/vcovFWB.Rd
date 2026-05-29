@@ -10,6 +10,7 @@ vcovFWB(
   R = 1000,
   start = FALSE,
   wtype = getOption("fwb_wtype", "exp"),
+  drop0 = FALSE,
   ...,
   fix = FALSE,
   use = "pairwise.complete.obs",
@@ -27,29 +28,31 @@ vcovFWB(
     By default (\code{cluster = NULL}), either \code{attr(x, "cluster")} is used
     (if any) or otherwise every observation is assumed to be its own cluster.}
 
-\item{R}{the number of bootstrap replications.}
+\item{R}{the number of bootstrap replications. Default is 1000 (more is better but slower).}
 
-\item{start}{\code{logical}; should \code{.coef(x)} be passed as \code{start} to the \code{update(x, weights = ...)} call? In case the model \code{x} is computed by some numeric iteration, this may speed up the bootstrapping.}
+\item{start}{\code{logical}; should \code{.coef(x)} be passed as \code{start} to the \code{update(x, weights = ...)} call? In case the model \code{x} is computed by some numeric iteration, this may speed up the bootstrapping. Default is \code{FALSE}.}
 
-\item{wtype}{string; the type of weights to use. Allowable options include \code{"exp"} (the default), \code{"pois"}, \code{"multinom"}, and \code{"mammen"}. See \code{\link[=fwb]{fwb()}} for details. See \code{\link[=set_fwb_wtype]{set_fwb_wtype()}} to set a global default.}
+\item{wtype}{string; the type of weights to use. Allowable options include \code{"exp"} (the default), \code{"poisson"}, \code{"multinom"}, \code{"mammen"}, \code{"beta"}, and \code{"power"}. See \code{\link[=fwb]{fwb()}} for details. See \code{\link[=set_fwb_wtype]{set_fwb_wtype()}} to set a global default.}
+
+\item{drop0}{\code{logical}; when \code{wtype} is \code{"multinom"} or \code{"poisson"}, whether to drop units that are given weights of 0 from the model call in each iteration. If \code{TRUE}, the model will be called with an additional \code{subset} argument, filtering out units with weights of 0 (note this will overwrite any argument to \code{subset} in the original call). If \code{NA}, weights of 0 will be set to \code{NA} instead. Ignored for other \code{wtype}s because they don't produce 0 weights. Default is \code{FALSE}.}
 
 \item{...}{ignored.}
 
 \item{fix}{\code{logical}; if \code{TRUE}, the covariance matrix is fixed to be positive semi-definite in case it is not.}
 
-\item{use}{\code{character}; specification passed to \code{\link[stats:cor]{stats::cov()}} for handling missing coefficients/parameters.}
+\item{use}{\code{character}; specification passed to \code{\link[stats:cov]{stats::cov()}} for handling missing coefficients/parameters.}
 
 \item{.coef}{a function used to extract the coefficients from each fitted model. Must return a numeric vector. By default, \code{\link[stats:coef]{stats::coef}} is used, but \code{marginaleffects::get_coef} can be a more reliable choice for some models that have a non-standard \code{coef()} method, like that for \code{nnet::multinom()} models.}
 
-\item{verbose}{\code{logical}; whether to display a progress bar.}
+\item{verbose}{\code{logical}; whether to display a progress bar. The default value, \code{NULL}, is \code{FALSE} when parallelization is used (see \code{cl} below) and \code{TRUE} otherwise.}
 
-\item{cl}{a cluster object created by \pkgfun{parallel}{makeCluster}, an integer to indicate the number of child-processes (integer values are ignored on Windows) for parallel evaluations, or the string \code{"future"} to use a \code{future} backend. See the \code{cl} argument of \pkgfun{pbapply}{pblapply} for details. If \code{NULL}, no parallelization will take place. See \code{vignette("fwb-rep")} for details.}
+\item{cl}{a cluster object created by \pkgfun{parallel}{makeCluster}, an integer to indicate the number of child-processes (integer values are ignored on Windows) for parallel evaluations, or the string \code{"future"} to use a \code{future} backend. See the \code{cl} argument of \pkgfun{pbapply}{pblapply} for details. If \code{NULL}, no parallelization will take place. See the section "Parallel Processing" in Details.}
 }
 \value{
 A matrix containing the covariance matrix estimate.
 }
 \description{
-\code{vcovFWB()} estimates the covariance matrix of model coefficient estimates using the fractional weighted bootstrap. It serves as a drop-in for \code{stats::vcov()} or \code{sandwich::vcovBS()}. Clustered covariances are can be requested.
+\code{vcovFWB()} estimates the covariance matrix of model coefficient estimates using the fractional weighted bootstrap. It serves as a drop-in for \code{\link[stats:vcov]{stats::vcov()}} or \pkgfun{sandwich}{vcovBS}. Clustered covariances are can be requested.
 }
 \details{
 \code{vcovFWB()} functions like other \code{vcov()}-like functions, such as those in the \pkg{sandwich} package, in particular, \pkgfun{sandwich}{vcovBS}, which implements the traditional bootstrap (and a few other bootstrap varieties for linear models). Sets of weights are generated as described in the documentation for \code{\link[=fwb]{fwb()}}, and the supplied model is re-fit using those weights. When the fitted model already has weights, these are multiplied by the bootstrap weights.
@@ -57,6 +60,10 @@ A matrix containing the covariance matrix estimate.
 For \code{lm} objects, the model is re-fit using \code{\link[=.lm.fit]{.lm.fit()}} for speed, and, similarly, \code{glm} objects are re-fit using \code{\link[=glm.fit]{glm.fit()}} (or whichever fitting method was originally used). For other objects, \code{\link[=update]{update()}} is used to populate the weights and re-fit the model (this assumes the fitting function accepts non-integer case weights through a \code{weights} argument). If a model accepts weights in some other way, \code{\link[=fwb]{fwb()}} should be used instead; \code{vcovFWB()} is inherently limited in its ability to handle all possible models. It is important that the original model was not fit using frequency weights (i.e., weights that allow one row of data to represent multiple full, identical, individual units) unless clustering is used.
 
 See \pkgfun{sandwich}{vcovBS} and \pkgfun{sandwich}{vcovCL} for more information on clustering covariance matrices, and see \code{\link[=fwb]{fwb()}} for more information on how clusters work with the fractional weighted bootstrap. When clusters are specified, each cluster is given a bootstrap weight, and all members of the cluster are given that weight; estimation then proceeds as normal. By default, when \code{cluster} is unspecified, each unit is considered its own cluster.
+\subsection{Parallel Processing}{
+
+To speed up evaluation, parallel processing can be enabled. One way to do so is to supply an argument to \code{cl}. This can be either an integer(not available on Windows), a cluster object created by \pkgfun{parallel}{makeCluster}, or the string \code{"future"}. Another general way is to use functionality in the \CRANpkg{futurize} package, which is compatible with \pkg{fwb}. See \code{vignette("futurize-81-fwb", package = "futurize")} for details. See also \code{vignette("fwb-rep")} for information on replicability with (and without) parallel processing.
+}
 }
 \examples{
 \dontshow{if (rlang::is_installed("lmtest")) withAutoprint(\{ # examplesIf}
@@ -116,5 +123,10 @@ vcovFWB(fit, R = 200, .coef = coef_multinom)
 \dontshow{\}) # examplesIf}
 }
 \seealso{
-\code{\link[=fwb]{fwb()}} for performing the fractional weighted bootstrap on an arbitrary quantity; \code{\link[=fwb.ci]{fwb.ci()}} for computing nonparametric confidence intervals for \code{fwb} objects; \code{\link[=summary.fwb]{summary.fwb()}} for producing standard errors and confidence intervals for \code{fwb} objects; \pkgfun{sandwich}{vcovBS} for computing covariance matrices using the traditional bootstrap (the fractional weighted bootstrap is also available but with limited options).
+\itemize{
+\item \code{\link[=fwb]{fwb()}} for performing the fractional weighted bootstrap on an arbitrary quantity
+\item \code{\link[=fwb.ci]{fwb.ci()}} for computing nonparametric confidence intervals for \code{fwb} objects
+\item \code{\link[=summary.fwb]{summary.fwb()}} for producing standard errors and confidence intervals for \code{fwb} objects
+\item \pkgfun{sandwich}{vcovBS} for computing covariance matrices using the traditional bootstrap (the fractional weighted bootstrap is also available but with limited options).
+}
 }

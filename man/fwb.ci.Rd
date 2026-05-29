@@ -18,7 +18,7 @@ fwb.ci(
 \method{print}{fwbci}(x, hinv = NULL, ...)
 }
 \arguments{
-\item{fwb.out}{an \code{fwb} object; the output of a call to \code{\link[=fwb]{fwb()}}.}
+\item{fwb.out}{an \verb{<fwb>} object; the output of a call to \code{\link[=fwb]{fwb()}}.}
 
 \item{conf}{the desired confidence level. Default is .95 for 95\% confidence intervals.}
 
@@ -35,7 +35,7 @@ fwb.ci(
 \item{x}{an \code{fwbci} object; the output of a call to \code{fwb.ci()}.}
 }
 \value{
-An \code{fwbci} object, which inherits from \code{bootci} and has the following components:
+An \verb{<fwbci>} object, which inherits from \verb{<bootci>} and has the following components:
 \item{R}{the number of bootstrap replications in the original call to \code{fwb()}.}
 \item{t0}{the observed value of the statistic on the same scale as the intervals (i.e., after applying \code{h} and then \code{hinv}.}
 \item{call}{the call to \code{fwb.ci()}.}
@@ -80,7 +80,7 @@ This involves subtracting the "bias" (\eqn{\hat{t} - t_0}) from the estimate \eq
 }
 }
 
-Interpolation on the normal quantile scale is used when a non-integer order statistic is required, as in \code{boot::boot.ci()}. Note that unlike with \code{boot::boot.ci()}, studentized confidence intervals (\code{type = "stud"}) are not allowed.
+Interpolation on the normal quantile scale is used when a non-integer order statistic is required, as in \code{boot::boot.ci()}. Note that unlike with \pkgfun{boot}{boot.ci}, studentized confidence intervals (\code{type = "stud"}) are not allowed.
 }
 \section{Functions}{
 \itemize{
@@ -115,5 +115,11 @@ fwb.ci(fwb_out, index = "induced", type = "norm",
        hinv = exp)
 }
 \seealso{
-\code{\link[=fwb]{fwb()}} for performing the fractional weighted bootstrap; \code{\link[=get_ci]{get_ci()}} for extracting confidence intervals from an \code{fwbci} object; \code{\link[=summary.fwb]{summary.fwb()}} for producing clean output from \code{fwb()} that includes confidence intervals calculated by \code{fwb.ci()}; \pkgfun{boot}{boot.ci} for computing confidence intervals from the traditional bootstrap; \code{\link[=vcovFWB]{vcovFWB()}} for computing parameter estimate covariance matrices using the fractional weighted bootstrap
+\itemize{
+\item \code{\link[=fwb]{fwb()}} for performing the fractional weighted bootstrap
+\item \code{\link[=get_ci]{get_ci()}} for extracting confidence intervals from an \code{fwbci} object
+\item \code{\link[=summary.fwb]{summary.fwb()}} for producing clean output from \code{fwb()} that includes confidence intervals calculated by \code{fwb.ci()}
+\item \pkgfun{boot}{boot.ci} for computing confidence intervals from the traditional bootstrap
+\item \code{\link[=vcovFWB]{vcovFWB()}} for computing parameter estimate covariance matrices using the fractional weighted bootstrap
+}
 }

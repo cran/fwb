@@ -1,8 +1,8 @@
 #' Plots of the Output of a Fractional Weighted Bootstrap
 #'
-#' `plot.fwb()` takes an `fwb` object and produces plots for the bootstrap replicates of the statistic of interest.
+#' `plot.fwb()` takes an `<fwb>` object and produces plots for the bootstrap replicates of the statistic of interest.
 #'
-#' @param x an `fwb` object; the output of a call to [fwb()].
+#' @param x an `<fwb>` object; the output of a call to [fwb()].
 #' @param index the index of the position of the quantity of interest in `x$t0` if more than one was specified in `fwb()`. Only one value is allowed at a time. By default the first statistic is used.
 #' @param qdist `character`; when a Q-Q plot is requested (as it is by default; see `type` argument below), the distribution against which the Q-Q plot should be drawn. Allowable options include `"norm"` (normal distribution - the default) and `"chisq"` (chi-squared distribution).
 #' @param nclass when a histogram is requested (as it is by default; see `type` argument below), the number of classes to be used. The default is the integer between 10 and 100 closest to `ceiling(length(R)/25)` where `R` is the number of bootstrap replicates.
@@ -10,49 +10,60 @@
 #' @param type the type of plot to display. Allowable options include `"hist"` for a histogram of the bootstrap estimates and `"qq"` for a Q-Q plot of the estimates against the distribution supplied to `qdist`.
 #' @param ... ignored.
 #'
-#' @return `x` is returned invisibly.
+#' @return
+#' `x` is returned invisibly.
 #'
-#' @details This function can produces two side-by-side plots: a histogram of the bootstrap replicates and a Q-Q plot of the bootstrap replicates against theoretical quantiles of a supplied distribution (normal or chi-squared). For the histogram, a vertical dotted line indicates the position of the estimate computed in the original sample. For the Q-Q plot, the expected line is plotted.
+#' @details
+#' This function can produces two side-by-side plots: a histogram of the bootstrap replicates and a Q-Q plot of the bootstrap replicates against theoretical quantiles of a supplied distribution (normal or chi-squared). For the histogram, a vertical dotted line indicates the position of the estimate computed in the original sample. For the Q-Q plot, the expected line is plotted.
 #'
 #' @seealso [fwb()], [summary.fwb()], \pkgfun{boot}{plot.boot}, [hist()], [qqplot()]
 #'
 #' @examples
-#' # See examples at help("fwb")
+#' # See examples at `help("fwb")`
 
 #' @exportS3Method plot fwb
 plot.fwb <- function(x, index = 1L, qdist = "norm", nclass = NULL, df, type = c("hist", "qq"), ...) {
 
   index <- check_index(index, x[["t"]])
 
-  chk::chk_string(qdist)
-
   t <- x[["t"]][, index]
   t0 <- x[["t0"]][index]
 
   t <- t[is.finite(t)]
+
   if (all_the_same(t)) {
-    .wrn(sprintf("all values of t* are equal to %s", mean(t, na.rm = TRUE)))
+    arg::wrn("all values of {.field t*} are equal to {.val {mean(t, na.rm = TRUE)}}")
+
     return(invisible(x))
   }
 
-  chk::chk_character(type)
-  type <- tryCatch(match.arg(tolower(type), c("hist", "qq"), several.ok = TRUE),
-                   error = function(e) {
-                     .err('`type` must be one or more of "hist" or "qq"')
-                   })
+  type <- arg::match_arg(type, c("hist", "qq"), several.ok = TRUE)
 
-  opar <- graphics::par(mfrow = c(1L, length(type)))
-  on.exit(graphics::par(opar))
+  if (any(type == "hist")) {
+    arg::when_not_null(nclass, arg::arg_count)
+
+    if (is_null(nclass)) {
+      nclass <- min(max(ceiling(length(t) / 25), 10), 100)
+    }
+  }
+
+  if (any(type == "qq")) {
+    qdist <- arg::match_arg(qdist, c("norm", "chisq"))
+
+    if (qdist == "chisq") {
+      arg::when_supplied(df, arg::arg_number)
+
+      if (missing(df)) {
+        df <- estimate_chisq_df(t)
+      }
+    }
+  }
+
+  op <- graphics::par(mfrow = c(1L, length(type)))
+  on.exit(graphics::par(op), add = TRUE)
 
   for (i in type) {
     if (i == "hist") {
-      if (is_null(nclass)) {
-        nclass <- min(max(ceiling(length(t) / 25), 10), 100)
-      }
-      else {
-        chk::chk_count(nclass)
-      }
-
       rg <- range(t)
       if (t0 < rg[1L])
         rg[1L] <- t0
@@ -74,22 +85,12 @@ plot.fwb <- function(x, index = 1L, qdist = "norm", nclass = NULL, df, type = c(
       p <- ppoints(x$R, a = .5)
 
       if (qdist == "chisq") {
-        if (missing(df)) {
-          df <- estimate_chisq_df(t)
-        }
-        else {
-          chk::chk_number(df)
-        }
         qfun <- function(p_) qchisq(p_, df = df)
         qlab <- sprintf("Quantiles of Chi-squared(%s)", round(df, 2))
       }
       else if (qdist == "norm") {
         qfun <- function(p_) qnorm(p_)
         qlab <- "Quantiles of Standard Normal"
-      }
-      else {
-        .err(sprintf("%s distribution not supported",
-                     add_quotes(qdist)))
       }
 
       qqplot(qfun(p), t, xlab = qlab, ylab = colnames(x[["t"]])[index])

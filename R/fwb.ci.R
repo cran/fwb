@@ -2,7 +2,7 @@
 #'
 #' @description `fwb.ci()` generates several types of equi-tailed two-sided nonparametric confidence intervals. These include the normal approximation, the basic bootstrap interval, the percentile bootstrap interval, the bias-corrected percentile bootstrap interval, and the bias-correct and accelerated (BCa) bootstrap interval.
 #'
-#' @param fwb.out an `fwb` object; the output of a call to [fwb()].
+#' @param fwb.out an `<fwb>` object; the output of a call to [fwb()].
 #' @param conf the desired confidence level. Default is .95 for 95% confidence intervals.
 #' @param type the type of confidence interval desired. Allowable options include `"wald"` (Wald interval), `"norm"` (normal approximation), `"basic"` (basic interval), `"perc"` (percentile interval), `"bc"` (bias-correct percentile interval), and `"bca"` (BCa interval). More than one is allowed. Can also be `"all"` to request all of them. BCa intervals require that the number of bootstrap replications is larger than the sample size.
 #' @param index the index of the position of the quantity of interest in `fwb.out$t0` if more than one was specified in `fwb()`. Only one value is allowed at a time. By default the first statistic is used.
@@ -11,14 +11,15 @@
 #' @param ... ignored
 #'
 #' @returns
-#' An `fwbci` object, which inherits from `bootci` and has the following components:
+#' An `<fwbci>` object, which inherits from `<bootci>` and has the following components:
 #' \item{R}{the number of bootstrap replications in the original call to `fwb()`.}
 #' \item{t0}{the observed value of the statistic on the same scale as the intervals (i.e., after applying `h` and then `hinv`.}
 #' \item{call}{the call to `fwb.ci()`.}
 #'
 #' There will be additional components named after each confidence interval type requested. For `"wald"` and `"norm"`, this is a matrix with one row containing the confidence level and the two confidence interval limits. For the others, this is a matrix with one row containing the confidence level, the indices of the two order statistics used in the calculations, and the confidence interval limits.
 #'
-#' @details `fwb.ci()` functions similarly to \pkgfun{boot}{boot.ci} in that it takes in a bootstrapped object and computes confidence intervals. This interface is a bit old-fashioned, but was designed to mimic that of `boot.ci()`. For a more modern interface, see [summary.fwb()].
+#' @details
+#' `fwb.ci()` functions similarly to \pkgfun{boot}{boot.ci} in that it takes in a bootstrapped object and computes confidence intervals. This interface is a bit old-fashioned, but was designed to mimic that of `boot.ci()`. For a more modern interface, see [summary.fwb()].
 #'
 #' The bootstrap intervals are defined as follows, with \eqn{\alpha =} 1 - `conf`, \eqn{t_0} the estimate in the original sample, \eqn{\hat{t}} the average of the bootstrap estimates, \eqn{s_t} the standard deviation of the bootstrap estimates, \eqn{t^{(i)}} the set of ordered estimates with \eqn{i} corresponding to their quantile, and \eqn{z_\frac{\alpha}{2}} and \eqn{z_{1-\frac{\alpha}{2}}} the upper and lower critical \eqn{z} scores.
 #'
@@ -52,10 +53,14 @@
 #' }
 #' }
 #'
-#' Interpolation on the normal quantile scale is used when a non-integer order statistic is required, as in `boot::boot.ci()`. Note that unlike with `boot::boot.ci()`, studentized confidence intervals (`type = "stud"`) are not allowed.
+#' Interpolation on the normal quantile scale is used when a non-integer order statistic is required, as in `boot::boot.ci()`. Note that unlike with \pkgfun{boot}{boot.ci}, studentized confidence intervals (`type = "stud"`) are not allowed.
 #'
-#' @seealso [fwb()] for performing the fractional weighted bootstrap; [get_ci()] for extracting confidence intervals from an `fwbci` object; [summary.fwb()] for producing clean output from `fwb()` that includes confidence intervals calculated by `fwb.ci()`; \pkgfun{boot}{boot.ci} for computing confidence intervals from the traditional bootstrap; [vcovFWB()] for computing parameter estimate covariance matrices using the fractional weighted bootstrap
-#'
+#' @seealso
+#' * [fwb()] for performing the fractional weighted bootstrap
+#' * [get_ci()] for extracting confidence intervals from an `fwbci` object
+#' * [summary.fwb()] for producing clean output from `fwb()` that includes confidence intervals calculated by `fwb.ci()`
+#' * \pkgfun{boot}{boot.ci} for computing confidence intervals from the traditional bootstrap
+#' * [vcovFWB()] for computing parameter estimate covariance matrices using the fractional weighted bootstrap
 #'
 #' @examples
 #' set.seed(123, "L'Ecuyer-CMRG")
@@ -90,13 +95,12 @@ fwb.ci <- function(fwb.out, conf = .95, type = "bc", index = 1L,
 
   call <- match.call()
 
-  chk::chk_is(fwb.out, "boot")
-  chk::chk_number(conf)
-  chk::chk_range(conf, c(0, 1), inclusive = FALSE)
+  arg::arg_is(fwb.out, "boot")
+  arg::arg_number(conf)
+  arg::arg_between(conf, c(0, 1), inclusive = FALSE)
 
-  chk::chk_character(type)
-  type <- match_arg(type, c(.allowed_ci.types(), "all"),
-                    several.ok = TRUE)
+  type <- arg::match_arg(type, c(.allowed_ci.types(), "all"),
+                         several.ok = TRUE)
 
   if (any(type == "all")) {
     if (is_null(fwb.out[["cluster"]])) {
@@ -118,17 +122,17 @@ fwb.ci <- function(fwb.out, conf = .95, type = "bc", index = 1L,
       msg <- c(msg, "BCa confidence intervals cannot be computed when there are fewer bootstrap replications than units in the original dataset")
     }
 
-    if (isTRUE(attr(fwb.out, "simple", TRUE)) &&
-        isTRUE(attr(fwb.out, "random_statistic", TRUE))) {
-      msg <- c(msg, 'BCa confidence intervals cannot be computed when there is randomness in `statistic` and `simple = TRUE` in the call to `fbw()`. See `vignette("fwb-rep")` for details')
+    if (isTRUE(.attr(fwb.out, "simple")) &&
+        isTRUE(.attr(fwb.out, "random_statistic"))) {
+      msg <- c(msg, 'BCa confidence intervals cannot be computed when there is randomness in {.arg statistic} and {.code simple = TRUE} in the call to {.fun fbw}. See {.vignette [vignette("fwb-rep")]{fwb::fwb-rep} for details')
     }
 
     if (is_not_null(msg)) {
       if (all(type == "bca")) {
-        .err(msg[1L])
+        arg::err(msg[1L])
       }
 
-      .wrn(msg[1L])
+      arg::wrn(msg[1L])
 
       type <- setdiff(type, "bca")
     }
@@ -140,20 +144,19 @@ fwb.ci <- function(fwb.out, conf = .95, type = "bc", index = 1L,
   t0 <- fwb.out[["t0"]][index]
 
   if (anyNA(t)) {
-    .err("some bootstrap estimates are `NA`; cannot calculate confidence intervals")
+    arg::err("some bootstrap estimates are {.val {NA}}; cannot calculate confidence intervals")
   }
 
   if (!all(is.finite(t))) {
-    .err("some bootstrap estimates are non-finite; cannot calculate confidence intervals")
+    arg::err("some bootstrap estimates are non-finite; cannot calculate confidence intervals")
   }
 
   if (all_the_same(t)) {
-    .err(sprintf("all estimates are equal to %s\n Cannot calculate confidence intervals",
-                 mean(t, na.rm = TRUE)))
+    arg::err("all estimates are equal to {.val {mean(t)}}; cannot calculate confidence intervals")
   }
 
   if (length(t) != fwb.out[["R"]]) {
-    .err(gettextf("'t' must be of length %d", fwb.out[["R"]]), domain = NA)
+    arg::err("{.field t} must be of length {fwb.out[['R']]}")
   }
 
   fins <- which(is.finite(t))
@@ -162,7 +165,7 @@ fwb.ci <- function(fwb.out, conf = .95, type = "bc", index = 1L,
               setNames(vector("list", length(type)), type))
 
   if (!identical(t, h(t))) {
-    .err("`h` can only be `identity()`. Other transformations are not supported")
+    arg::err("{.arg h} can only be {.fun identity}. Other transformations are not supported")
   }
 
   for (i in type) {
@@ -241,7 +244,7 @@ print.fwbci <- function(x, hinv = NULL, ...) {
     bcarg <- range(ci.out[["bca"]][, 2:3])
   }
 
-  level <- 100 * attr(ci.out, "conf", TRUE)
+  level <- 100 * .attr(ci.out, "conf")
 
   intervals <- do.call("rbind", lapply(ci.types, function(i) {
     hinv(.tail(ci.out[[i]][1L, ], 2L))
@@ -347,8 +350,8 @@ print.fwbci <- function(x, hinv = NULL, ...) {
 
 #' @export
 get_ci <- function(x, type = "all") {
-  chk::chk_is(x, "bootci")
-  chk::chk_character(type)
+  arg::arg_is(x, "bootci")
+  arg::arg_character(type)
 
   name_trans <- function(x, old, new) {
     if (old %in% names(x)) names(x)[names(x) == old] <- new
@@ -366,17 +369,14 @@ get_ci <- function(x, type = "all") {
     type <- allowed_cis
   }
   else {
-    type <- match_arg(type, allowed_cis)
+    type <- arg::match_arg(type, allowed_cis, several.ok = TRUE)
   }
 
   out <- setNames(lapply(type, function(t) {
     setNames(.tail(x[[t]][1L, ], 2L), c("L", "U"))
   }), type)
 
-  attr(out, "conf") <- {
-    if (is_not_null(attr(x, "conf", TRUE))) attr(x, "conf", TRUE)
-    else x[[4L]][, 1L]
-  }
+  attr(out, "conf") <- .attr(x, "conf") %or% x[[4L]][, 1L]
 
   out
 }

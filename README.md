@@ -1,7 +1,7 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-# `fwb`: Fractional Weighted Bootstrap
+# *fwb*: Fractional Weighted Bootstrap
 
 <!-- badges: start -->
 
@@ -10,12 +10,12 @@ status](https://www.r-pkg.org/badges/version/fwb)](https://CRAN.R-project.org/pa
 [![CRAN_Downloads_Badge](https://cranlogs.r-pkg.org/badges/fwb)](https://CRAN.R-project.org/package=fwb)
 <!-- badges: end -->
 
-`fwb` implements the fractional weighted bootstrap (FWB), also known as
+*fwb* implements the fractional weighted bootstrap (FWB), also known as
 the Bayesian bootstrap, following the treatment by Xu et al. (2020). The
-FWB involves generating sets of weights from a uniform Dirichlet
-distribution to be used in estimating statistics of interest, which
-yields a posterior distribution that can be interpreted in the same way
-the traditional (resampling-based) bootstrap distribution can be. The
+FWB involves generating sets of weights from a continuous distribution
+to be used in estimating statistics of interest, which yields a
+posterior distribution that can be interpreted in the same way the
+traditional (resampling-based) bootstrap distribution can be. The
 primary function is `fwb()`, which is essentially a drop-in for
 `boot::boot()` in that it takes in a dataset and a function and applies
 that function to the dataset and a randomly generated set of case
@@ -25,27 +25,27 @@ normal, bias-corrected percentile, etc.), and `vcovFWB()`, a drop-in for
 `sandwich::vcovBS()` for computing a coefficient covariance matrix from
 a regression model using the FWB.
 
-Check out the `fwb` [website](https://ngreifer.github.io/fwb/)!
+Check out the *fwb* [website](https://ngreifer.github.io/fwb/)!
 
 ## Installation
 
-You can install the current stable version of `fwb` from CRAN with:
+You can install the current stable version of *fwb* from CRAN with:
 
 ``` r
 install.packages("fwb")
 ```
 
-You can install the development version of `fwb` from
-[GitHub](https://github.com/) with:
+You can install the development version of *fwb* from
+[GitHub](https://github.com/ngreifer/fwb) with:
 
 ``` r
-# install.packages("remotes")
-remotes::install_github("ngreifer/fwb")
+# install.packages("pak")
+pak::pak("ngreifer/fwb")
 ```
 
 ## Examples
 
-Below are some examples of how to use `fwb`. We set a seed to ensure all
+Below are some examples of how to use *fwb*. We set a seed to ensure all
 results are replicable. (Note that when parallel processing is used, a
 special kind of seed needs to be set; see `vignette("fwb-rep")` for
 details.)
@@ -67,14 +67,15 @@ using the FWB, which makes it particularly effective for this analysis.
 
 ``` r
 data("bearingcage", package = "fwb")
+library(survival)
 
 # Function to compute the scale (eta) and shape (beta) parameters
 # from weighted data
 weibull_est <- function(data, w) {
-  fit <- survival::survreg(survival::Surv(hours, failure) ~ 1,
-                           data = data, weights = w,
-                           dist = "weibull")
-
+  fit <- survreg(Surv(hours, failure) ~ 1,
+                 data = data, weights = w,
+                 dist = "weibull")
+  
   c(eta = unname(exp(coef(fit))),
     beta = 1 / fit$scale)
 }
@@ -101,10 +102,10 @@ summary(fwb_est, ci.type = "bca")
 #> beta 2.04e+00   8.79e-01 1.24e+00  4.55e+00
 
 # Plot the bootstrap distribution
-plot(fwb_est, index = "beta", qdist = "chisq")
+plot(fwb_est, index = "beta")
 ```
 
-<img src="man/figures/README-unnamed-chunk-5-1.png" width="80%" style="display: block; margin: auto;" />
+<img src="man/figures/README-unnamed-chunk-5-1.png" alt="" width="80%" style="display: block; margin: auto;" />
 
 ### Infertility logistic regression analysis using `infert` dataset
 
@@ -131,9 +132,9 @@ library("lmtest")
 # The traditional bootstrap fails
 coeftest(fit, vcov = sandwich::vcovBS)[1:3, ]
 #>              Estimate   Std. Error       z value Pr(>|z|)
-#> (Intercept) -6.904101 2.285991e+22 -3.020179e-22        1
-#> spontaneous  3.230286 1.670378e+14  1.933866e-14        1
-#> induced      2.190303 1.194912e+14  1.833025e-14        1
+#> (Intercept) -6.904101 3.967764e+14 -1.740048e-14        1
+#> spontaneous  3.230286 1.915285e+14  1.686583e-14        1
+#> induced      2.190303 1.289215e+14  1.698943e-14        1
 
 # The fractional weighted bootstrap succeeds
 coeftest(fit, vcov = vcovFWB)[1:3, ]
@@ -180,10 +181,10 @@ boot_est
 #> 
 #> 
 #> Bootstrap Statistics :
-#>      original       bias     std. error
-#> t1* -6.904101 2.629510e+21 8.083197e+22
-#> t2*  3.230286 2.114656e+13 2.336509e+14
-#> t3*  2.190303 1.696351e+13 1.878001e+14
+#>      original        bias     std. error
+#> t1* -6.904101 -2.878435e+19 9.411095e+20
+#> t2*  3.230286  3.386823e+13 3.219334e+14
+#> t3*  2.190303  2.385851e+13 2.316350e+14
 
 fwb_est <- fwb(infert, fit_fun, R = 999, verbose = FALSE)
 fwb_est
@@ -207,13 +208,13 @@ where the failure is:
 plot(boot_est, index = 2)
 ```
 
-<img src="man/figures/README-unnamed-chunk-9-1.png" width="80%" style="display: block; margin: auto;" />
+<img src="man/figures/README-unnamed-chunk-9-1.png" alt="" width="80%" style="display: block; margin: auto;" />
 
 ``` r
 plot(fwb_est, index = 2)
 ```
 
-<img src="man/figures/README-unnamed-chunk-10-1.png" width="80%" style="display: block; margin: auto;" />
+<img src="man/figures/README-unnamed-chunk-10-1.png" alt="" width="80%" style="display: block; margin: auto;" />
 
 It is clear that the estimates from the traditional bootstrap are
 pathological, whereas the estimates from the FWB are more reasonable.
@@ -223,7 +224,7 @@ bias-corrected percentile interval should probably be computed instead.
 
 ## Weighted statistics and transformations
 
-`fwb` also contains utility functions for computing weighted statistics
+*fwb* also contains utility functions for computing weighted statistics
 to facilitate incorporation of bootstrapped weights into estimates.
 These include `w_mean()`, `w_var()`, `w_sd()`, `w_quantile()`, and
 `w_median()` for computing weighted means, variances, standard
@@ -239,10 +240,10 @@ incorporated.
 
 ## When to use the fractional weighted bootstrap
 
-The FWB is uniformly more reliable than the traditional bootstrap when a
+The FWB is typically more reliable than the traditional bootstrap when a
 weighted statistic can be computed (though this doesn’t mean the
 bootstrap is always valid). In most simple cases, both methods will
-yield the same results. In some pathological examples like those above,
+yield similar results. In some pathological examples like those above,
 the FWB dramatically outperforms the traditional bootstrap. This will be
 true when running regression models with sparse categorical variables
 either in the outcome or among the predictors, for example, when
@@ -254,21 +255,34 @@ it. Still, though, the FWB deserves a place in an analyst’s toolbox.
 
 ## Related packages
 
-- `boot`, which provides the traditional bootstrap, including an
+- *boot*, which provides the traditional bootstrap, including an
   interface that accepts frequency weights to compute weighted
   statistics, as was used above
-- `bayesboot`, which also provides functionality for the Bayesian
+- *bayesboot*, which also provides functionality for the Bayesian
   bootstrap but does so in a more explicitly Bayesian fashion and with
-  returned objects that are less consistent with those from `boot`
+  returned objects that are less consistent with those from *boot*
 
 ## Author
 
 - Noah Greifer (noah.greifer@gmail.com)
 
-## Citing `fwb`
+## Citing *fwb*
 
-To cite `fwb`, please use `citation("fwb")`, which generates a package
+To cite *fwb*, please use `citation("fwb")`, which generates a package
 citation.
+
+## Community guidelines
+
+To report a bug, please use the GitHub
+[Issues](https://github.com/ngreifer/fwb/issues) page. If possible,
+please provide enough information to reproduce the bug, including the
+version of the package you are using, the version of R you are using,
+and the code you ran.
+
+If you have a question or feature request, you are welcome to use GitHub
+issues or email the author (see **Author** section above). General
+feedback is always welcome. In general, I prefer an email or GitHub
+issue over a pull request (except for typos in the documentation).
 
 ## References
 

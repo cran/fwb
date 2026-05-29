@@ -6,16 +6,16 @@
 #' @param statistic a function, which, when applied to `data`, returns a vector containing the statistic(s) of interest. The function should take at least two arguments; the first argument should correspond to the dataset and the second argument should correspond to a vector of weights. Any further arguments can be passed to `statistic` through the `...` argument.
 #' @param R the number of bootstrap replicates. Default is 999 but more is always better. For the percentile bootstrap confidence interval to be exact, it can be beneficial to use one less than a multiple of 100.
 #' @param cluster optional; a vector containing cluster membership. If supplied, will run the cluster bootstrap. See Details. Evaluated first in `data` and then in the global environment.
-#' @param simple `logical`; if `TRUE`, weights will be generated on-the-fly in each bootstrap replication; if `FALSE`, all weights will be generated at once and then supplied to `statistic`. Cannot be `TRUE` when `wtype = "multinom"`. The default (`NULL`) sets to `FALSE` if `wtype = "multinom"` and to `TRUE` otherwise.
-#' @param wtype string; the type of weights to use. Allowable options include `"exp"` (the default), `"pois"`, `"multinom"`, and `"mammen"`. See Details. See [set_fwb_wtype()] to set a global default.
+#' @param simple `logical`; if `TRUE`, weights will be generated on-the-fly in each bootstrap replication; if `FALSE`, all weights will be generated at once and then supplied to `statistic`. The default (`NULL`) sets to `FALSE` if `wtype = "multinom"` and to `TRUE` otherwise.
+#' @param wtype string; the type of weights to use. Allowable options include `"exp"` (the default), `"poisson"`, `"multinom"`, `"mammen"`, `"beta"`, and `"power"`. See Details. See [set_fwb_wtype()] to set a global default.
 #' @param strata optional; a vector containing stratum membership for stratified bootstrapping. If supplied, will essentially perform a separate bootstrap within each level of `strata`. This does not affect results when `wtype = "poisson"`.
-#' @param drop0 `logical`; when `wtype` is `"multinom"` or `"poisson"`, whether to drop units that are given weights of 0 from the dataset and weights supplied to `statistic` in each iteration. Ignored for other `wtype`s because they don't produce 0 weights. Default is `FALSE`.
-#' @param verbose `logical`; whether to display a progress bar.
-#' @param cl a cluster object created by \pkgfun{parallel}{makeCluster}, an integer to indicate the number of child-processes (integer values are ignored on Windows) for parallel evaluations, or the string `"future"` to use a `future` backend. See the `cl` argument of \pkgfun{pbapply}{pblapply} for details. If `NULL`, no parallelization will take place. See `vignette("fwb-rep")` for details.
+#' @param drop0 `logical`; when `wtype` is `"multinom"` or `"poisson"`, whether to drop units that are given weights of 0 from the dataset and weights supplied to `statistic` in each iteration. If `NA`, weights of 0 will be set to `NA` instead. Ignored for other `wtype`s because they don't produce 0 weights. Default is `FALSE`.
+#' @param verbose `logical`; whether to display a progress bar. The default value, `NULL`, is `FALSE` when parallelization is used (see `cl` below) and `TRUE` otherwise.
+#' @param cl a cluster object created by \pkgfun{parallel}{makeCluster}, an integer to indicate the number of child-processes (integer values are ignored on Windows) for parallel evaluations, or the string `"future"` to use a `future` backend. See the `cl` argument of \pkgfun{pbapply}{pblapply} for details. If `NULL`, no parallelization will take place. See the section "Parallel Processing" in Details.
 #' @param ... other arguments passed to `statistic`.
 #'
 #' @returns
-#' An `fwb` object, which also inherits from `boot`, with the following components:
+#' An `<fwb>` object, which also inherits from `<boot>`, with the following components:
 #'
 #' \item{t0}{The observed value of `statistic` applied to `data` with uniform weights.}
 #' \item{t}{A matrix with `R` rows, each of which is a bootstrap replicate of the result of calling `statistic`.}
@@ -28,9 +28,10 @@
 #' \item{strata}{The vector passed to `strata`, if any.}
 #' \item{wtype}{The type of weights used as determined by the `wtype` argument.}
 #'
-#' `fwb` objects have [coef()] and [vcov()] methods, which extract the `t0` component and covariance of the `t` components, respectively.
+#' `<fwb>` objects have [coef()] and [vcov()] methods, which extract the `t0` component and covariance of the `t` components, respectively.
 #'
-#' @details `fwb()` implements the fractional weighted bootstrap and is meant to function as a drop-in for `boot::boot(., stype = "f")` (i.e., the usual bootstrap but with frequency weights representing the number of times each unit is drawn). In each bootstrap replication, when `wtype = "exp"` (the default), the weights are sampled from independent exponential distributions with rate parameter 1 and then normalized to have a mean of 1, equivalent to drawing the weights from a Dirichlet distribution. Other weights are allowed as determined by the `wtype` argument (see below for details). The function supplied to `statistic` must incorporate the weights to compute a weighted statistic. For example, if the output is a regression coefficient, the weights supplied to the `w` argument of `statistic` should be supplied to the `weights` argument of `lm()`. These weights should be used any time frequency weights would be, since they are meant to function like frequency weights (which, in the case of the traditional bootstrap, would be integers). Unfortunately, there is no way for `fwb()` to know whether you are using the weights correctly, so care should be taken to ensure weights are correctly incorporated into the estimator.
+#' @details
+#' `fwb()` implements the fractional weighted bootstrap and is meant to function as a drop-in for `boot::boot(., stype = "f")` (i.e., the usual bootstrap but with frequency weights representing the number of times each unit is drawn). In each bootstrap replication, when `wtype = "exp"` (the default), the weights are sampled from independent exponential distributions with rate parameter 1 and then normalized to have a mean of 1, equivalent to drawing the weights from a Dirichlet distribution. Other weights are allowed as determined by the `wtype` argument (see below for details). The function supplied to `statistic` must incorporate the weights to compute a weighted statistic. For example, if the output is a regression coefficient, the weights supplied to the `w` argument of `statistic` should be supplied to the `weights` argument of `lm()`. These weights should be used any time frequency weights would be, since they are meant to function like frequency weights (which, in the case of the traditional bootstrap, would be integers). Unfortunately, there is no way for `fwb()` to know whether you are using the weights correctly, so care should be taken to ensure weights are correctly incorporated into the estimator.
 #'
 #' When fitting binomial regression models (e.g., logistic) using [glm()], it may be useful to change the `family` to a "quasi" variety (e.g., [quasibinomial()]) to avoid a spurious warning about "non-integer #successes".
 #'
@@ -48,33 +49,49 @@
 #'
 #' \describe{
 #' \item{`"exp"`}{
-#' Draws weights from an exponential distribution with rate parameter 1 using [rexp()]. These weights are the usual "Bayesian bootstrap" weights described in Xu et al. (2020). They are equivalent to drawing weights from a uniform Dirichlet distribution, which is what gives these weights the interpretation of a Bayesian prior. The weights are scaled to have a mean of 1 within each stratum (or in the full sample if `strata` is not supplied).
+#' Draws weights from an exponential distribution with rate parameter 1 using [rexp()]. These weights are the usual "Bayesian bootstrap" weights described in Xu et al. (2020). They are equivalent to drawing weights from a uniform Dirichlet distribution, which is what gives these weights the interpretation of a Bayesian prior. These positive weights have a mean and variance of 1 and skewness of 2. The weights are scaled to have a mean of 1 within each stratum (or in the full sample if `strata` is not supplied).
 #' }
 #' \item{`"multinom"`}{
 #' Draws integer weights using [sample()], which samples unit indices with replacement and uses the tabulation of the indices as frequency weights. This is equivalent to drawing weights from a multinomial distribution. Using `wtype = "multinom"` is the same as using `boot::boot(., stype = "f")` instead of `fwb()` (i.e., the resulting estimates will be identical). When `strata` is supplied, unit indices are drawn with replacement within each stratum so that the sum of the weights in each stratum is equal to the stratum size.
 #' }
 #' \item{`"poisson"`}{
-#' Draws integer weights from a Poisson distribution with 1 degree of freedom using [rpois()]. This is an alternative to the multinomial weights that yields similar estimates (especially as the sample size grows) but can be faster. Note `strata` is ignored when using `"poisson"`.
+#' Draws integer weights from a Poisson distribution with \eqn{\lambda = 1} using [rpois()]. This is an alternative to the multinomial weights that yields similar estimates (especially as the sample size grows) but can be faster. Note `strata` is ignored when using `"poisson"`.
 #' }
 #' \item{`"mammen"`}{
-#' Draws weights from a modification of the distribution described by Mammen (1983) for use in the wild bootstrap. These positive weights have a mean, variance, and skewness of 1, making them second-order accurate (in contrast to the usual exponential weights, which are only first-order accurate). The weights \eqn{w} are drawn such that \eqn{P(w=(3+\sqrt{5})/2)=(\sqrt{5}-1)/2\sqrt{5}} and \eqn{P(w=(3-\sqrt{5})/2)=(\sqrt{5}+1)/2\sqrt{5}}. The weights are scaled to have a mean of 1 within each stratum (or in the full sample if `strata` is not supplied).
+#' Draws weights from a modification of the distribution described by Mammen (1983) for use in the wild bootstrap. These positive weights have a mean, variance, and skewness of 1, making them second-order accurate (in contrast to the usual exponential weights, which are only first-order accurate). The weights \eqn{w} are drawn such that \eqn{P(w=(3+\sqrt{5})/2)=(\sqrt{5}-1)/2\sqrt{5}} and \eqn{P(w=(3-\sqrt{5})/2)=(\sqrt{5}+1)/2\sqrt{5}} as described by Owen (2025). The weights are scaled to have a mean of 1 within each stratum (or in the full sample if `strata` is not supplied).
+#' }
+#' \item{`"beta"`}{
+#' Draws weights from a \eqn{\text{Beta}(1/2, 3/2)} distribution using [rbeta()] as described by Owen (2025). These positive weights have a mean, variance, and skewness of 1 when scaled by a factor of 4, making them second-order accurate. The weights are scaled to have a mean of 1 within each stratum (or in the full sample if `strata` is not supplied).
+#' }
+#' \item{`"power"`}{
+#' Draws weights from a \eqn{\text{Beta}(\sqrt{2} - 1, 1)} distribution using [rbeta()] as described by Owen (2025). These positive weights have a mean and variance of 1 and skewness of \eqn{2(\sqrt{2} - 1)} when scaled by a factor of \eqn{2+\sqrt{2}}. The weights are scaled to have a mean of 1 within each stratum (or in the full sample if `strata` is not supplied).
 #' }
 #' }
 #'
-#' `"exp"` is the default due to it being the formulation described in Xu et al. (2020) and in the most formulations of the Bayesian bootstrap; it should be used if one wants to remain in line with these guidelines or to maintain a Bayesian flavor to the analysis, whereas `"mammen"` might be preferred for its frequentist operating characteristics, though its performance has not been studied in this context. `"multinom"` and `"poisson"` should only be used for comparison purposes.
+#' `"exp"` is the default due to it being the formulation described in Xu et al. (2020) and in the most formulations of the Bayesian bootstrap; it should be used if one wants to remain in line with these guidelines or to maintain a Bayesian flavor to the analysis, whereas other distributions might be preferred for their frequentist operating characteristics, though more research is needed on their general performance. Owen (2025) recommends `"beta"` and `"power"`, as these provided close to nominal confidence interval coverage without excessively large intervals in the context of estimating the mean in a small sample. `"multinom"` and `"poisson"` should primarily be used for comparison purposes or as an alternative interface to \pkg{boot}.
 #'
-#' @seealso [fwb.ci()] for calculating confidence intervals; [summary.fwb()] for displaying output in a clean way; [plot.fwb()] for plotting the bootstrap distributions; [vcovFWB()] for estimating the covariance matrix of estimates using the FWB; [set_fwb_wtype()] for an example of using weights other than the default exponential weights; \pkgfun{boot}{boot} for the traditional bootstrap.
+#' ## Parallel Processing
+#'
+#' To speed up evaluation, parallel processing can be enabled. One way to do so is to supply an argument to `cl`. This can be either an integer(not available on Windows), a cluster object created by \pkgfun{parallel}{makeCluster}, or the string `"future"`. Another general way is to use functionality in the \CRANpkg{futurize} package, which is compatible with \pkg{fwb}. See `vignette("futurize-81-fwb", package = "futurize")` for details. See also `vignette("fwb-rep")` for information on replicability with (and without) parallel processing.
+#'
+#' @seealso
+#' * [fwb.ci()] for calculating confidence intervals
+#' * [summary.fwb()] for displaying output in a clean way
+#' * [plot.fwb()] for plotting the bootstrap distributions
+#' * [vcovFWB()] for estimating the covariance matrix of estimates using the FWB
+#' * [set_fwb_wtype()] for an example of using weights other than the default exponential weights
+#' * \pkgfun{boot}{boot} for the traditional bootstrap.
 #'
 #' See `vignette("fwb-rep")` for information on reproducibility.
 #'
 #' @references
 #' Mammen, E. (1993). Bootstrap and Wild Bootstrap for High Dimensional Linear Models. *The Annals of Statistics*, 21(1). \doi{10.1214/aos/1176349025}
 #'
+#' Owen, A. B. (2025). Better bootstrap t confidence intervals for the mean. arXiv. \doi{10.48550/arXiv.2508.10083}
+#'
 #' Rubin, D. B. (1981). The Bayesian Bootstrap. *The Annals of Statistics*, 9(1), 130–134. \doi{10.1214/aos/1176345338}
 #'
 #' Xu, L., Gotwalt, C., Hong, Y., King, C. B., & Meeker, W. Q. (2020). Applications of the Fractional-Random-Weight Bootstrap. *The American Statistician*, 74(4), 345–358. \doi{10.1080/00031305.2020.1731599}
-#'
-#' The use of the `"mammen"` formulation of the bootstrap weights was suggested by Lihua Lei [here](https://x.com/lihua_lei_stat/status/1641538993090351106).
 #'
 #' @examplesIf rlang::is_installed("survival")
 #' # Performing a Weibull analysis of the Bearing Cage
@@ -104,55 +121,59 @@
 #' @export
 fwb <- function(data, statistic, R = 999, cluster = NULL, simple = NULL,
                 wtype = getOption("fwb_wtype", "exp"), strata = NULL, drop0 = FALSE,
-                verbose = TRUE, cl = NULL, ...) {
+                verbose = NULL, cl = NULL, ...) {
 
   bcall <- match.call()
 
   #Check data
-  chk::chk_not_missing(data, "`data`")
-  chk::chk_data(data)
+  arg::arg_supplied(data)
+  arg::arg_data.frame(data)
 
   n <- nrow(data)
-  if (is_null(n) || !chk::vld_count(n) || n < 1L) {
-    .err("`data` must be present")
+  if (is_null(n) || !rlang::is_scalar_integerish(n) || n < 1L) {
+    arg::err("{.arg data} must be present")
   }
 
   #Check statistic
-  chk::chk_not_missing(statistic, "`statistic`")
-  chk::chk_function(statistic)
+  arg::arg_supplied(statistic)
+  arg::arg_function(statistic)
+  .statistic <- substitute(statistic)
 
   #Check R
-  chk::chk_count(R)
-  chk::chk_gt(R, 0)
+  arg::arg_count(R)
+  arg::arg_gt(R, 0)
 
   #Check cluster
   clus <- substitute(cluster)
   cluster <- eval(clus, data, parent.frame())
 
-  if (is_not_null(cluster)) {
-    .chk_atomic_vector(cluster)
+  arg::when_not_null(cluster,
+                     arg::arg_vector,
+                     arg::arg_length(n))
 
+  if (is_not_null(cluster)) {
     cluster <- factor(cluster)
     nc <- nlevels(cluster)
     cluster_numeric <- as.integer(cluster)
   }
 
   #Check strata
-  strat <- substitute(strata)
-  strata <- eval(strat, data, parent.frame())
+  .strata <- substitute(strata)
+  strata <- eval(.strata, data, parent.frame())
   strata_to_use <- NULL
 
-  if (is_not_null(strata)) {
-    .chk_atomic_vector(strata)
-    chk::chk_length(strata, n)
+  arg::when_not_null(strata,
+                     arg::arg_vector,
+                     arg::arg_length(n))
 
+  if (is_not_null(strata)) {
     strata_to_use <- factor(strata)
 
     if (is_not_null(cluster)) {
       cs <- unique(data.frame(cluster, strata_to_use))
 
       if (nrow(cs) != nlevels(cluster)) {
-        .err("clusters must be completely nested within strata")
+        arg::err("clusters must be completely nested within strata")
       }
 
       strata_to_use <- cs[[2L]]
@@ -160,31 +181,30 @@ fwb <- function(data, statistic, R = 999, cluster = NULL, simple = NULL,
   }
 
   #Check verbose
-  chk::chk_flag(verbose)
+  arg::when_not_null(verbose, arg::arg_flag)
+
+  if (is_null(verbose)) {
+    verbose <- (guess_num_workers(cl) == 1)
+  }
 
   #Check wtype
-  chk::chk_string(wtype)
-
   gen_weights <- make_gen_weights(wtype)
-  wtype <- attr(gen_weights, "wtype", TRUE)
+  wtype <- .attr(gen_weights, "wtype")
 
   #Check drop0
   if (wtype %in% c("multinom", "poisson")) {
-    chk::chk_flag(drop0)
+    arg::arg_or(drop0,
+                arg::arg_is_NA,
+                arg::arg_flag)
   }
   else {
     drop0 <- FALSE
   }
 
   #Check simple
-  if (is_not_null(simple)) {
-    chk::chk_flag(simple)
+  arg::when_not_null(simple, arg::arg_flag)
 
-    if (simple && wtype == "multinom") {
-      .err('`simple` cannot be `TRUE` when `wtype = "multinom"`')
-    }
-  }
-  else {
+  if (is_null(simple)) {
     simple <- wtype != "multinom"
   }
 
@@ -195,7 +215,7 @@ fwb <- function(data, statistic, R = 999, cluster = NULL, simple = NULL,
 
     if (simple && !parallel_seed_set &&
         ((is.numeric(cl) && !isTRUE(all.equal(cl, 1))) || identical(cl, "future"))) {
-      .wrn('`cl` was supplied but the random number generator is not suitable for parallelization. Set an appropriate seed using `set.seed(###, "L\'Ecuyer-CMRG")`, where ### is your favorite integer. See `?set.seed` for details')
+      arg::wrn('{.arg cl} was supplied but the random number generator is not suitable for parallelization. Set an appropriate seed using {.code set.seed(###, "L\'Ecuyer-CMRG")}, where ### is your favorite integer. See {.fun set.seed} for details')
     }
 
     if (identical(cl, "future")) {
@@ -205,27 +225,41 @@ fwb <- function(data, statistic, R = 999, cluster = NULL, simple = NULL,
 
   #Test fun
   test_w <- .set_class(rep.int(1, n), "fwb_internal_w")
-  t0 <- try(call_statistic(statistic, data = data, ...,
-                           .wi = test_w, drop0 = drop0))
+  t0 <- rlang::try_fetch(
+    call_statistic(statistic, data = data, ...,
+                   .wi = test_w, drop0 = drop0),
+    error = function(e) {
+      if (rlang::is_call(e$call, "statistic")) {
+        e$call[[1L]] <- .statistic
+      }
 
-  if (inherits(t0, "try-error")) {
-    .err("There was an error running the function supplied to `statistic` on unit-weighted data. Error produced:\n\t",
-         conditionMessage(attr(t0, "condition", TRUE)),
-         tidy = FALSE)
-  }
+      arg::err("there was a problem running the function supplied to {.arg statistic} on unit-weighted data",
+               parent = e)
+    }
+  )
 
   if (!is.numeric(t0) || is_not_null(dim(t0))) {
-    .err("the output of the function supplied to `statistic` must be a numeric vector")
+    arg::err("the output of the function supplied to {.arg statistic} must be a numeric vector")
   }
 
   if (anyNA(t0)) {
-    .err("some estimates were returned as `NA` in the original sample")
+    arg::err("some estimates were returned as {.val {NA}} in the original sample")
   }
 
   random_statistic <- NULL
   if (simple) {
-    t0_rep <- try(call_statistic(statistic, data = data, ...,
-                                 .wi = test_w, drop0 = drop0))
+    t0_rep <- rlang::try_fetch(
+      call_statistic(statistic, data = data, ...,
+                     .wi = test_w, drop0 = drop0),
+      error = function(e) {
+        if (rlang::is_call(e$call, "statistic")) {
+          e$call[[1L]] <- .statistic
+        }
+
+        arg::err("there was a problem running the function supplied to {.arg statistic} on unit-weighted data",
+                 parent = e)
+      }
+    )
 
     random_statistic <- !identical(t0_rep, t0)
   }
@@ -245,8 +279,7 @@ fwb <- function(data, statistic, R = 999, cluster = NULL, simple = NULL,
     if (simple) {
       FUN <- function(i) {
         wi <- drop(gen_weights(n, 1L, strata_to_use))
-        call_statistic(statistic, data = data,
-                       ...,
+        call_statistic(statistic, data = data, ...,
                        .wi = .set_class(wi, "fwb_internal_w"),
                        drop0 = drop0)
       }
@@ -254,8 +287,7 @@ fwb <- function(data, statistic, R = 999, cluster = NULL, simple = NULL,
     else {
       w <- gen_weights(n, R, strata_to_use)
       FUN <- function(i) {
-        call_statistic(statistic, data = data,
-                       ...,
+        call_statistic(statistic, data = data, ...,
                        .wi = .set_class(w[i, ], "fwb_internal_w"),
                        drop0 = drop0)
       }
@@ -266,8 +298,7 @@ fwb <- function(data, statistic, R = 999, cluster = NULL, simple = NULL,
       FUN <- function(i) {
         cluster_w <- drop(gen_weights(nc, 1L, strata_to_use))
         wi <- cluster_w[cluster_numeric]
-        call_statistic(statistic, data = data,
-                       ...,
+        call_statistic(statistic, data = data, ...,
                        .wi = .set_class(wi, "fwb_internal_w"),
                        drop0 = drop0)
       }
@@ -276,8 +307,7 @@ fwb <- function(data, statistic, R = 999, cluster = NULL, simple = NULL,
       cluster_w <- gen_weights(nc, R, strata_to_use)
       w <- cluster_w[, cluster_numeric, drop = FALSE]
       FUN <- function(i) {
-        call_statistic(statistic, data = data,
-                       ...,
+        call_statistic(statistic, data = data, ...,
                        .wi = .set_class(w[i, ], "fwb_internal_w"),
                        drop0 = drop0)
       }
@@ -290,6 +320,21 @@ fwb <- function(data, statistic, R = 999, cluster = NULL, simple = NULL,
     parallel::clusterExport(cl, varlist = "call_statistic",
                             envir = asNamespace("fwb"))
   }
+
+  # if (!verbose) {
+  #   nout <- 1L
+  # }
+  # else {
+  #   nw <- guess_num_workers(cl)
+  #
+  #   if (nw == 1L) {
+  #     nout <- 100L
+  #   }
+  #   else {
+  #     refresh_rate <- 1
+  #     nout <- min(max(1L, ceiling(R * .time["elapsed"] / (nw * refresh_rate))), 10L)
+  #   }
+  # }
 
   opb <- pbapply::pboptions(type = if (verbose) "timer" else "none")
   on.exit(pbapply::pboptions(opb))
@@ -304,7 +349,7 @@ fwb <- function(data, statistic, R = 999, cluster = NULL, simple = NULL,
   }
 
   if (anyNA(t)) {
-    .wrn("some estimates were returned as `NA`, which can cause problems in subsequent analyses")
+    arg::wrn("some estimates were returned as {.val {NA}}, which can cause problems in subsequent analyses")
   }
 
   colnames(t) <- names(t0)
@@ -393,33 +438,32 @@ print.fwb <- function(x, digits = getOption("digits", 3L), index = seq_len(ncol(
 
 check_statistic <- function(statistic) {
 
-  statistic_args <- setdiff(names(formals(statistic)),
+  statistic_args <- setdiff(rlang::fn_fmls_names(statistic),
                             "...")
 
   if (length(statistic_args) < 2L) {
-    .err("the function supplied to `statistic` must have at least two named arguments, the first corresponding to the dataset and the second corresponding to the weights")
+    arg::err("the function supplied to {.arg statistic} must have at least two named arguments, the first corresponding to the dataset and the second corresponding to the weights")
   }
 
-  forbidden_args <- setdiff(c(names(formals(fwb)), names(formals(call_statistic))),
+  forbidden_args <- setdiff(c(rlang::fn_fmls_names(fwb), rlang::fn_fmls_names(call_statistic)),
                             c("data", "..."))
 
   bad_args <- intersect(statistic_args, forbidden_args)
 
   if (is_not_null(bad_args)) {
-    .err(sprintf("the function supplied to `statistic` cannot have arguments named %s",
-                 word_list(bad_args, and.or = "or", quotes = TRUE)))
+    arg::err("the function supplied to {.arg statistic} cannot have arguments named {.or {.val {bad_args}}}")
   }
 
   invisible(NULL)
 }
 
 make_gen_weights <- function(wtype) {
-  wtype <- tolower(wtype)
-  wtype <- match_arg(wtype, c("exp", "multinom", "poisson", "mammen"))
+  wtype <- arg::match_arg(wtype, .w_types())
 
   fun <- switch(wtype,
                 "exp" = function(n, R, strata = NULL) {
-                  w <- matrix(rexp(n * R), nrow = R, ncol = n, byrow = TRUE)
+                  w <- matrix(rexp(n * R),
+                              nrow = R, ncol = n, byrow = TRUE)
 
                   if (is_null(strata) || nlevels(strata) <= 1L) {
                     return(w / rowMeans(w))
@@ -433,10 +477,11 @@ make_gen_weights <- function(wtype) {
                   w
                 },
                 "poisson" = function(n, R, strata = NULL) {
-                  matrix(rpois(n * R, 1), nrow = R, ncol = n, byrow = TRUE)
+                  matrix(rpois(n * R, 1),
+                         nrow = R, ncol = n, byrow = TRUE)
                 },
                 "multinom" = function(n, R, strata = NULL) {
-                  if (is_null(strata) || nlevels(strata) <= 1) {
+                  if (is_null(strata) || nlevels(strata) <= 1L) {
                     i <- sample.int(n, n * R, replace = TRUE)
                     dim(i) <- c(R, n)
                   }
@@ -456,7 +501,37 @@ make_gen_weights <- function(wtype) {
                   w <- matrix((3 - sqrt5) / 2 + sqrt5 * rbinom(n * R, 1L, .5 - 1 / (2 * sqrt5)),
                               nrow = R, ncol = n, byrow = TRUE)
 
-                  if (is_null(strata) || nlevels(strata) <= 1) {
+                  if (is_null(strata) || nlevels(strata) <= 1L) {
+                    return(w / rowMeans(w))
+                  }
+
+                  for (s in levels(strata)) {
+                    in_s <- which(strata == s)
+                    w[, in_s] <- w[, in_s] / rowMeans(w[, in_s])
+                  }
+
+                  w
+                },
+                "beta" = function(n, R, strata = NULL) {
+                  w <- matrix(4 * rbeta(n * R, .5, 1.5),
+                              nrow = R, ncol = n, byrow = TRUE)
+
+                  if (is_null(strata) || nlevels(strata) <= 1L) {
+                    return(w / rowMeans(w))
+                  }
+
+                  for (s in levels(strata)) {
+                    in_s <- which(strata == s)
+                    w[, in_s] <- w[, in_s] / rowMeans(w[, in_s])
+                  }
+
+                  w
+                },
+                "power" = function(n, R, strata = NULL) {
+                  w <- matrix((2 + sqrt(2)) * rbeta(n * R, sqrt(2) - 1, 1),
+                              nrow = R, ncol = n, byrow = TRUE)
+
+                  if (is_null(strata) || nlevels(strata) <= 1L) {
                     return(w / rowMeans(w))
                   }
 
@@ -475,25 +550,31 @@ make_gen_weights <- function(wtype) {
 call_statistic <- function(statistic, data, ..., .wi, drop0 = FALSE) {
   rlang::local_options(fwb_internal_w_env = rlang::current_env())
 
-  if (drop0) {
+  if (!isFALSE(drop0)) {
     non0_wi <- which(.wi != 0)
 
     if (length(non0_wi) != length(.wi)) {
-      .wi <- .wi[non0_wi]
+      if (isTRUE(drop0)) {
+        .wi <- .wi[non0_wi]
 
-      return(statistic(data[non0_wi, , drop = FALSE], .wi, ...))
+        return(statistic(data[non0_wi, , drop = FALSE], .wi, ...))
+      }
+
+      if (is.na(drop0)) {
+        is.na(.wi)[-non0_wi] <- TRUE
+      }
     }
   }
 
   statistic(data, .wi, ...)
 }
 
-#' @exportS3Method coef fwb
+#' @exportS3Method stats::coef fwb
 coef.fwb <- function(object, ...) {
   object[["t0"]]
 }
 
-#' @exportS3Method vcov fwb
+#' @exportS3Method stats::vcov fwb
 vcov.fwb <- function(object, ...) {
-  cov(object[["t"]])
+  stats::cov(object[["t"]])
 }

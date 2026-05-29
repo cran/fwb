@@ -386,7 +386,7 @@ or <code>&quot;future&quot;</code>, which uses a <code>future</code> backend
 involves different requirements for ensuring reproducibility.</p></li>
 </ul>
 <p>This guide will proceed for combinations of these scenarios.</p>
-<div id="case-1-no-parallelization-cl-null" class="section level3">
+<div id="case-1" class="section level3">
 <h3>Case 1: No parallelization (<code>cl = NULL</code>)</h3>
 <p>When no parallelization is used (i.e., <code>cl</code> is
 unspecified, <code>NULL</code>, or <code>1</code>), all you need to do
@@ -399,27 +399,26 @@ with your favorite integer.</p>
 <span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a>f.out <span class="ot">&lt;-</span> <span class="fu">fwb</span>(.)</span></code></pre></div>
 </div>
-<div id="case-2-simple-false-non-random-statistic" class="section level3">
+<div id="case-2" class="section level3">
 <h3>Case 2: <code>simple = FALSE</code>, non-random
 <code>statistic</code></h3>
 <p>If <code>simple = FALSE</code> and <code>statistic</code> does not
-have a random component, see Case 1, regardless of whether or how
-parallelization is used. In this case, no random process occurs within
-each cluster, so no special steps need to be taken beyond setting a
-seed. Note that <code>simple</code> is <code>TRUE</code> by default
-unless <code>wtype = &quot;multinom&quot;</code>, so this must be set manually.
-See below for a code example:</p>
+have a random component, see <a href="#case-1">Case 1</a>, regardless of
+whether or how parallelization is used. In this case, no random process
+occurs within each cluster, so no special steps need to be taken beyond
+setting a seed. Note that <code>simple = TRUE</code> by default unless
+<code>wtype = &quot;multinom&quot;</code>, so this must be set manually. See below
+for a code example:</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">set.seed</span>({N})</span>
 <span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a></span>
 <span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>f.out <span class="ot">&lt;-</span> <span class="fu">fwb</span>(., <span class="at">simple =</span> <span class="cn">FALSE</span>)</span></code></pre></div>
 </div>
-<div id="case-3-cl-is-an-integer" class="section level3">
+<div id="case-3" class="section level3">
 <h3>Case 3: <code>cl</code> is an integer</h3>
-<p>When <code>cl</code> is an integer and the criteria for Case 2 are
-not met (i.e., <code>simple = TRUE</code> or <code>statistic</code> has
-a random component), one additional step is required for ensuring
-reproducibility. Again, all you need to do is use
-<code>set.seed()</code>, but you must call it with
+<p>When <code>cl</code> is an integer and the criteria for <a href="#case-2">Case 2</a> are not met (i.e., <code>simple = TRUE</code>
+or <code>statistic</code> has a random component), one additional step
+is required for ensuring reproducibility. Again, all you need to do is
+use <code>set.seed()</code>, but you must call it with
 <code>kind = &quot;L&#39;Ecuyer-CMRG&quot;</code>, which is the only method
 appropriate for use across multiple clusters. See below for a code
 example:</p>
@@ -427,14 +426,14 @@ example:</p>
 <span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a></span>
 <span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a>f.out <span class="ot">&lt;-</span> <span class="fu">fwb</span>(., <span class="at">cl =</span> <span class="dv">3</span>)</span></code></pre></div>
 </div>
-<div id="case-4-cl-is-future" class="section level3">
+<div id="case-4" class="section level3">
 <h3>Case 4: <code>cl</code> is <code>&quot;future&quot;</code></h3>
-<p>When using a <code>future</code> backend and the criteria for Case
-are not met, you can use the same solution as for Case 3.
-<code>fwb()</code> performs an additional step to make sure the seed is
-correctly sent to <code>future.apply::future_lapply()</code>.
-(Internally, this works by setting <code>future.seed = TRUE</code>,
-which you should not do yourself.) See below for a code example:</p>
+<p>When using a <code>future</code> backend and the criteria for <a href="#case-2">Case 2</a> are not met, you can use the same solution as
+for Case 3. <code>fwb()</code> performs an additional step to make sure
+the seed is correctly sent to
+<code>future.apply::future_lapply()</code>. (Internally, this works by
+setting <code>future.seed = TRUE</code>, which you should not do
+yourself.) See below for a code example:</p>
 <div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">library</span>(future)</span>
 <span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a></span>
 <span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="fu">plan</span>(multisession, <span class="at">workers =</span> <span class="dv">3</span>)</span>
@@ -442,7 +441,7 @@ which you should not do yourself.) See below for a code example:</p>
 <span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a></span>
 <span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a>f.out <span class="ot">&lt;-</span> <span class="fu">fwb</span>(., <span class="at">cl =</span> <span class="st">&quot;future&quot;</span>)</span></code></pre></div>
 </div>
-<div id="case-5-cl-is-a-cluster-object" class="section level3">
+<div id="case-5" class="section level3">
 <h3>Case 5: <code>cl</code> is a <code>cluster</code> object</h3>
 <p>When <code>cl</code> is a <code>cluster</code> object (i.e., the
 output of a call to <code>parallel::makeCluster()</code>,
@@ -487,7 +486,9 @@ randomness in <code>statistic</code></li>
 that was used to originally generate the weights, and
 <code>fwb.ci()</code> recalls that seed to re-generate the weights and
 then computes the required statistics for the BCa interval without
-requiring any extra involvement by the user.</p>
+requiring any extra involvement by the user. Remember,
+<code>simple = TRUE</code> by default unless
+<code>wtype = &quot;multinom&quot;</code>.</p>
 <p>Otherwise, when the following condition is met, an additional step is
 required:</p>
 <ul>
@@ -506,6 +507,17 @@ computed. <code>fwb.ci()</code> (and <code>summary()</code> and
 <code>confint()</code>, which call <code>fwb.ci()</code>) automatically
 checks for this case and throws an error if BCa confidence intervals are
 requested when these conditions are met.</p>
+</div>
+<div id="verbose" class="section level2">
+<h2><code>verbose</code></h2>
+<p>It may be surprising to know that the <code>verbose</code> argument
+can affect reproducibility. This is because of how <em>pbapply</em>, the
+package used to generate progress bars when <code>verbose = TRUE</code>,
+handles parallelization. To ensure reproducibility when parallelization
+is used, it is advisable to set <code>verbose = FALSE</code> and omit a
+progress bar. As of <em>fwb</em> version 0.6.0, this is the default.
+This also improves performance. Setting <code>verbose = TRUE</code>
+affects reproducibility in Cases <a href="#case-3">3</a>, <a href="#case-4">4</a>, and <a href="#case-5">5</a>.</p>
 </div>
 
 
